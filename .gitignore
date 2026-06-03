@@ -1,0 +1,11 @@
+# Temp files
+temp_check.js
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log

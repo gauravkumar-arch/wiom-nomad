@@ -1,0 +1,2311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Wiom Nomad — Travel Desk Portal</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; background:#f0f2f5; color:#1a1a2e; }
+
+    /* ─── NAVBAR ─── */
+    .navbar {
+      background: linear-gradient(135deg,#E81B8C 0%,#c4167a 100%);
+      padding: 12px 24px; display:flex; align-items:center; justify-content:space-between;
+      box-shadow:0 4px 16px rgba(232,27,140,0.4); position:sticky; top:0; z-index:100;
+    }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .brand .logo {
+      width:38px; height:38px; border-radius:10px; overflow:hidden;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 2px 8px rgba(0,0,0,0.2);
+    }
+    .brand .logo img { width:38px; height:38px; object-fit:cover; border-radius:10px; }
+    .brand h1 { color:#fff; font-size:17px; font-weight:700; }
+    .brand span { color:rgba(255,255,255,0.75); font-size:11px; display:block; }
+    .nav-right { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    .user-chip { display:flex; align-items:center; gap:8px; position:relative; }
+    .user-chip .avatar {
+      width:34px; height:34px; border-radius:50%;
+      background:rgba(255,255,255,0.25);
+      border:2px solid rgba(255,255,255,0.5);
+      display:flex; align-items:center; justify-content:center;
+      color:#fff; font-weight:700; font-size:12px;
+    }
+    .user-chip p { color:#fff; font-size:13px; font-weight:600; }
+    .user-chip span { color:rgba(255,255,255,0.7); font-size:11px; display:block; }
+    /* Notification badge */
+    .notif-badge {
+      position:absolute; top:-4px; right:-4px;
+      background:#fff; color:#E81B8C; font-size:10px; font-weight:800;
+      width:18px; height:18px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      border:2px solid #c4167a; animation:pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
+    .btn-reset { background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.3); padding:5px 10px; border-radius:6px; font-size:11px; cursor:pointer; }
+    .btn-reset:hover { background:rgba(255,255,255,0.25); color:#fff; }
+    .btn-logout { background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.3); padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+    .btn-logout:hover { background:rgba(255,255,255,0.28); border-color:rgba(255,255,255,0.6); color:#fff; }
+
+    /* ─── LAYOUT ─── */
+    .container { max-width:1300px; margin:0 auto; padding:24px 20px; }
+
+    /* ─── PAGE HEADER ─── */
+    .page-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; gap:12px; flex-wrap:wrap; }
+    .page-header h2 { font-size:20px; font-weight:700; color:#1a1a2e; }
+    .page-header p { font-size:13px; color:#718096; margin-top:2px; }
+    .header-actions { display:flex; gap:10px; flex-wrap:wrap; }
+    .btn-primary { background:linear-gradient(135deg,#E81B8C,#c4167a); color:#fff; border:none; padding:10px 20px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all 0.2s; white-space:nowrap; }
+    .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(232,27,140,0.45); }
+    .btn-export { background:#f0fff4; color:#276749; border:1px solid #9ae6b4; padding:10px 18px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+    .btn-export:hover { background:#c6f6d5; }
+
+    /* ─── STAT CARDS ─── */
+    .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+    .stat-card { background:#fff; border-radius:12px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); display:flex; align-items:center; gap:14px; transition:transform 0.2s; }
+    .stat-card:hover { transform:translateY(-2px); }
+    .stat-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; }
+    .stat-card h3 { font-size:26px; font-weight:800; color:#1a1a2e; }
+    .stat-card p { font-size:12px; color:#718096; margin-top:2px; }
+
+    /* ─── SECTION TABS ─── */
+    .section-tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+    .sec-tab { padding:7px 18px; border-radius:20px; border:none; cursor:pointer; font-size:12px; font-weight:600; background:#f0f2f5; color:#718096; transition:all 0.2s; position:relative; }
+    .sec-tab.active { background:#E81B8C; color:#fff; box-shadow:0 2px 8px rgba(232,27,140,0.35); }
+    .sec-tab:hover:not(.active) { background:#e2e8f0; }
+    .tab-count { display:inline-flex; align-items:center; justify-content:center; background:#E81B8C; color:#fff; font-size:10px; font-weight:800; min-width:16px; height:16px; border-radius:10px; padding:0 4px; margin-left:5px; }
+    .sec-tab.active .tab-count { background:rgba(255,255,255,0.3); }
+
+    /* ─── REQUEST CARDS ─── */
+    .requests-grid { display:flex; flex-direction:column; gap:12px; }
+    .request-card { background:#fff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); cursor:pointer; transition:all 0.2s; border-left:4px solid transparent; }
+    .request-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.1); transform:translateX(2px); }
+    .card-top { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:flex-start; margin-bottom:12px; }
+    .req-id { font-size:11px; color:#a0aec0; font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+    .req-title { font-size:14px; font-weight:700; color:#1a1a2e; margin-bottom:6px; }
+    .req-meta { display:flex; gap:12px; flex-wrap:wrap; }
+    .req-meta span { font-size:12px; color:#718096; display:flex; align-items:center; gap:4px; }
+    .req-actions { display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .card-bottom { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+    .emp-actions { display:flex; gap:6px; }
+
+    /* ─── PRIORITY BADGES ─── */
+    .badge { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap; }
+    .badge-pending-manager  { background:#fff3cd; color:#b7791f; }
+    .badge-pending-fh       { background:#e8f4fd; color:#2b6cb0; }
+    .badge-pending-td       { background:#f0e6ff; color:#6b46c1; }
+    .badge-processed        { background:#f0fff4; color:#276749; }
+    .badge-rejected         { background:#fff5f5; color:#c53030; }
+    .badge-cancelled        { background:#f7fafc; color:#718096; }
+    .p-badge { display:inline-flex; align-items:center; gap:3px; padding:3px 8px; border-radius:10px; font-size:10px; font-weight:700; }
+    .p-normal    { background:#f7fafc; color:#718096; }
+    .p-urgent    { background:#fffaf0; color:#c05621; border:1px solid #fbd38d; }
+    .p-emergency { background:#fff5f5; color:#c53030; border:1px solid #feb2b2; animation:urgentPulse 1.5s infinite; }
+    @keyframes urgentPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+    /* ─── PROGRESS STEPPER ─── */
+    .stepper { display:flex; align-items:center; gap:0; }
+    .step { display:flex; align-items:center; gap:0; }
+    .step-dot { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; border:2px solid; flex-shrink:0; }
+    .step-dot.done  { background:#48bb78; border-color:#48bb78; color:#fff; }
+    .step-dot.active{ background:#f6ad55; border-color:#f6ad55; color:#fff; }
+    .step-dot.todo  { background:#fff; border-color:#e2e8f0; color:#a0aec0; }
+    .step-line { width:28px; height:2px; }
+    .step-line.done   { background:#48bb78; }
+    .step-line.todo   { background:#e2e8f0; }
+    .step-label { font-size:9px; color:#a0aec0; text-align:center; margin-top:3px; white-space:nowrap; }
+    .stepper-wrap { display:flex; flex-direction:column; align-items:center; }
+    .stepper-row { display:flex; align-items:center; }
+
+    /* ─── BUTTONS ─── */
+    .btn-approve { background:#f0fff4; color:#276749; border:1px solid #9ae6b4; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+    .btn-approve:hover { background:#c6f6d5; }
+    .btn-reject { background:#fff5f5; color:#c53030; border:1px solid #feb2b2; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+    .btn-reject:hover { background:#fed7d7; }
+    .btn-process { background:#f0e6ff; color:#6b46c1; border:1px solid #d6bcfa; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+    .btn-process:hover { background:#e9d8fd; }
+    .btn-secondary { background:#f0f2f5; color:#4a5568; border:none; padding:10px 20px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; }
+    .btn-secondary:hover { background:#e2e8f0; }
+    .btn-edit { background:#ebf8ff; color:#2b6cb0; border:1px solid #bee3f8; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer; }
+    .btn-edit:hover { background:#bee3f8; }
+    .btn-cancel { background:#fff5f5; color:#c53030; border:1px solid #feb2b2; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer; }
+    .btn-cancel:hover { background:#fed7d7; }
+
+    /* ─── SLIDE PANEL MODAL ─── */
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:200; display:none; align-items:flex-start; justify-content:flex-end; }
+    .modal-overlay.open { display:flex; }
+    .modal-panel { background:#fff; width:600px; max-width:100%; height:100vh; overflow-y:auto; padding:28px; box-shadow:-4px 0 24px rgba(0,0,0,0.15); animation:slideIn 0.3s ease; }
+    @keyframes slideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+    .modal-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; }
+    .modal-header h3 { font-size:18px; font-weight:700; color:#1a1a2e; }
+    .close-btn { width:32px; height:32px; background:#f0f2f5; border:none; border-radius:8px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; color:#718096; flex-shrink:0; }
+    .close-btn:hover { background:#e2e8f0; }
+
+    /* ─── FORM ─── */
+    .form-section { margin-bottom:22px; }
+    .form-section-title { font-size:12px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid #e2e8f0; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+    .form-row.full { grid-template-columns:1fr; }
+    .form-group { display:flex; flex-direction:column; gap:5px; }
+    .form-group label { font-size:12px; font-weight:600; color:#4a5568; }
+    .form-group input, .form-group select, .form-group textarea { padding:9px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; color:#2d3748; outline:none; transition:border-color 0.2s; background:#f7fafc; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color:#E81B8C; background:#fff; }
+    .form-group textarea { resize:vertical; min-height:80px; font-family:inherit; }
+    .travel-types { display:flex; gap:10px; flex-wrap:wrap; }
+    .travel-type-btn { display:flex; align-items:center; gap:6px; padding:9px 16px; border:2px solid #e2e8f0; border-radius:10px; cursor:pointer; font-size:13px; font-weight:600; color:#718096; background:#f7fafc; transition:all 0.2s; user-select:none; }
+    .travel-type-btn.selected { border-color:#E81B8C; background:#fff0f8; color:#E81B8C; }
+    .cond-section { display:none; background:#f7fafc; border-radius:10px; padding:16px; margin-bottom:12px; border:1px solid #e2e8f0; }
+    .cond-section.visible { display:block; }
+    .cond-title { font-size:12px; font-weight:700; color:#4a5568; margin-bottom:12px; }
+    .form-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0; }
+
+    /* ─── PRIORITY SELECT STYLE ─── */
+    .priority-opts { display:flex; gap:8px; }
+    .priority-opt { flex:1; padding:9px 8px; border:2px solid #e2e8f0; border-radius:8px; cursor:pointer; text-align:center; font-size:12px; font-weight:600; color:#718096; background:#f7fafc; transition:all 0.2s; user-select:none; }
+    .priority-opt.sel-normal    { border-color:#718096; background:#f7fafc; color:#4a5568; }
+    .priority-opt.sel-urgent    { border-color:#dd6b20; background:#fffaf0; color:#c05621; }
+    .priority-opt.sel-emergency { border-color:#e53e3e; background:#fff5f5; color:#c53030; }
+
+    /* ─── DETAIL VIEW ─── */
+    .detail-section { margin-bottom:20px; }
+    .detail-sec-title { font-size:12px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #e2e8f0; }
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .detail-item label { font-size:11px; font-weight:600; color:#a0aec0; text-transform:uppercase; letter-spacing:0.4px; }
+    .detail-item p { font-size:13px; color:#2d3748; font-weight:500; margin-top:3px; }
+    .booking-box { background:#f0fff4; border:1px solid #9ae6b4; border-radius:10px; padding:14px; margin-top:10px; }
+    .booking-ref { font-size:16px; font-weight:800; color:#276749; }
+
+    /* ─── TIMELINE ─── */
+    .timeline { position:relative; padding-left:24px; }
+    .timeline::before { content:''; position:absolute; left:7px; top:0; bottom:0; width:2px; background:#e2e8f0; }
+    .timeline-item { position:relative; margin-bottom:18px; }
+    .t-dot { position:absolute; left:-21px; top:4px; width:14px; height:14px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 2px #e2e8f0; }
+    .t-action { font-size:13px; font-weight:700; color:#2d3748; }
+    .t-by { font-size:12px; color:#718096; margin-top:2px; }
+    .t-comment { font-size:12px; color:#4a5568; font-style:italic; background:#f7fafc; padding:7px 10px; border-radius:6px; margin-top:6px; }
+
+    /* ─── COMMENTS ─── */
+    .comment-item { background:#f7fafc; border-radius:10px; padding:12px; margin-bottom:10px; border-left:3px solid #e2e8f0; }
+    .comment-item.own { border-left-color:#E81B8C; background:#fff0f8; }
+    .comment-meta { font-size:11px; color:#a0aec0; margin-bottom:5px; display:flex; gap:8px; }
+    .comment-meta strong { color:#4a5568; }
+    .comment-text { font-size:13px; color:#2d3748; }
+    .comment-input-row { display:flex; gap:8px; margin-top:12px; }
+    .comment-input-row input { flex:1; padding:9px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; }
+    .comment-input-row input:focus { border-color:#E81B8C; }
+    .btn-comment { background:linear-gradient(135deg,#E81B8C,#c4167a); color:#fff; border:none; padding:9px 16px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+    .btn-comment:hover { box-shadow:0 2px 8px rgba(232,27,140,0.4); }
+
+    /* ─── MINI MODALS ─── */
+    .mini-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:300; display:none; align-items:center; justify-content:center; }
+    .mini-overlay.open { display:flex; }
+    .mini-box { background:#fff; border-radius:16px; padding:28px; width:420px; max-width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.2); }
+    .mini-box h3 { font-size:16px; font-weight:700; margin-bottom:16px; color:#1a1a2e; }
+    .mini-input { width:100%; padding:9px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; margin-bottom:12px; font-family:inherit; }
+    .mini-input:focus { border-color:#E81B8C; }
+    .mini-textarea { width:100%; padding:9px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; resize:vertical; min-height:90px; margin-bottom:16px; font-family:inherit; }
+    .mini-textarea:focus { border-color:#E81B8C; }
+    .mini-footer { display:flex; gap:8px; justify-content:flex-end; }
+    .approve-box { border-top:4px solid #38a169; }
+    .reject-box  { border-top:4px solid #e53e3e; }
+    .process-box { border-top:4px solid #805ad5; }
+
+    /* ─── ANALYTICS ─── */
+    .analytics-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px; }
+    .chart-card { background:#fff; border-radius:14px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+    .chart-card h3 { font-size:14px; font-weight:700; color:#1a1a2e; margin-bottom:16px; }
+    .chart-wrap { position:relative; height:200px; }
+    .top-travelers { width:100%; border-collapse:collapse; }
+    .top-travelers th { background:#f7fafc; color:#718096; font-size:11px; font-weight:700; text-transform:uppercase; padding:9px 12px; text-align:left; border-bottom:1px solid #e2e8f0; }
+    .top-travelers td { padding:9px 12px; font-size:13px; border-bottom:1px solid #f0f2f5; }
+    .top-travelers tr:hover td { background:#f7fafc; }
+
+    /* ─── CALENDAR ─── */
+    .cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .cal-header h3 { font-size:16px; font-weight:700; color:#1a1a2e; }
+    .cal-nav { background:#f0f2f5; border:none; border-radius:8px; padding:6px 14px; cursor:pointer; font-size:14px; font-weight:700; }
+    .cal-nav:hover { background:#e2e8f0; }
+    .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+    .cal-day-name { text-align:center; font-size:11px; font-weight:700; color:#718096; padding:8px 0; }
+    .cal-day { min-height:64px; border-radius:8px; padding:6px; background:#fff; border:1px solid #e2e8f0; cursor:default; }
+    .cal-day.has-trip { background:#ebf8ff; border-color:#bee3f8; cursor:pointer; }
+    .cal-day.has-trip:hover { background:#bee3f8; }
+    .cal-day.today { border-color:#E81B8C; border-width:2px; }
+    .cal-day .day-num { font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px; }
+    .cal-day.today .day-num { color:#E81B8C; font-weight:800; }
+    .cal-day .trip-dot { font-size:10px; line-height:1.4; overflow:hidden; }
+    .cal-day.other-month { background:#f7fafc; opacity:0.5; }
+    .cal-events { margin-top:20px; }
+    .cal-event-item { background:#fff; border-radius:10px; padding:12px 16px; margin-bottom:10px; box-shadow:0 2px 6px rgba(0,0,0,0.06); display:flex; gap:12px; align-items:center; border-left:4px solid; cursor:pointer; }
+    .cal-event-item:hover { box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+
+    /* ─── EMPTY STATE ─── */
+    .empty-state { text-align:center; padding:60px 20px; color:#a0aec0; }
+    .empty-state .e-icon { font-size:48px; margin-bottom:12px; }
+    .empty-state p { font-size:14px; }
+
+    /* ─── WORKFLOW BANNER ─── */
+    .workflow-banner { background:#fff; border-radius:12px; padding:14px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-bottom:24px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    .wf-step { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:5px 12px; border-radius:20px; }
+    .wf-arrow { color:#a0aec0; font-size:12px; }
+
+    /* ─── LOGIN SCREEN ─── */
+    .login-screen { position:fixed; inset:0; z-index:999; background:linear-gradient(145deg,#0f0118 0%,#1e0230 40%,#120118 100%); display:flex; align-items:center; justify-content:center; flex-direction:column; padding:20px; overflow:hidden; }
+    .login-screen::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% -10%, rgba(232,27,140,0.35) 0%, transparent 60%); pointer-events:none; z-index:0; }
+    .login-screen.hidden { display:none; }
+
+    /* Animated background orbs */
+    .login-orb { position:absolute; border-radius:50%; filter:blur(70px); pointer-events:none; z-index:0; }
+    .orb-1 { width:320px; height:320px; background:rgba(232,27,140,0.3); top:-100px; left:-80px; animation:orbFloat 10s ease-in-out infinite; }
+    .orb-2 { width:220px; height:220px; background:rgba(130,60,190,0.25); bottom:-60px; right:-40px; animation:orbFloat 8s ease-in-out infinite reverse; }
+    .orb-3 { width:160px; height:160px; background:rgba(49,130,206,0.15); top:45%; right:60px; animation:orbFloat 12s ease-in-out infinite 1.5s; }
+    @keyframes orbFloat { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-22px) scale(1.04)} }
+
+    /* Wiom CSS-based logos */
+    .wiom-nav-logo { width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,0.18); border:2px solid rgba(255,255,255,0.32); display:flex; align-items:center; justify-content:center; color:#fff; font-size:21px; font-weight:900; font-family:'Segoe UI',sans-serif; letter-spacing:-0.5px; flex-shrink:0; }
+    .wiom-login-logo { width:100%; height:100%; background:linear-gradient(135deg,#ff3fa6 0%,#b5106a 100%); display:flex; align-items:center; justify-content:center; color:#fff; font-size:28px; font-weight:900; font-family:'Segoe UI',sans-serif; letter-spacing:-1px; }
+
+    .login-logo { display:flex; align-items:center; gap:16px; margin-bottom:12px; position:relative; z-index:1; }
+    .login-logo .logo-box { width:64px; height:64px; border-radius:20px; overflow:hidden; box-shadow:0 0 0 3px rgba(232,27,140,0.4), 0 8px 28px rgba(232,27,140,0.55); flex-shrink:0; }
+    .login-logo h1 { color:#fff; font-size:30px; font-weight:800; letter-spacing:-0.5px; }
+    .login-logo p  { color:rgba(255,255,255,0.5); font-size:12px; margin-top:2px; }
+    .login-tagline { color:rgba(255,255,255,0.5); font-size:13px; margin-bottom:36px; position:relative; z-index:1; display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center; }
+    .login-tagline-pill { background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); padding:5px 14px; border-radius:20px; font-size:12px; color:rgba(255,255,255,0.65); white-space:nowrap; }
+
+    .login-cards { display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:660px; width:100%; position:relative; z-index:1; }
+    .login-card { background:rgba(255,255,255,0.055); border:1px solid rgba(232,27,140,0.22); border-radius:22px; padding:30px 26px; text-align:center; transition:all 0.35s; backdrop-filter:blur(8px); position:relative; overflow:hidden; }
+    .login-card::before { content:''; position:absolute; inset:0; border-radius:22px; background:linear-gradient(135deg, rgba(232,27,140,0.08) 0%, transparent 60%); opacity:0; transition:opacity 0.35s; pointer-events:none; }
+    .login-card:hover { background:rgba(232,27,140,0.1); border-color:rgba(232,27,140,0.55); transform:translateY(-5px); box-shadow:0 16px 48px rgba(232,27,140,0.25); }
+    .login-card:hover::before { opacity:1; }
+    .login-card .lc-icon { font-size:44px; margin-bottom:14px; display:block; }
+    .login-card h3 { color:#fff; font-size:17px; font-weight:700; margin-bottom:7px; }
+    .login-card p  { color:rgba(255,255,255,0.45); font-size:12px; line-height:1.6; margin-bottom:20px; }
+    .login-card .lc-select { width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(232,27,140,0.3); background:rgba(0,0,0,0.4); color:#e2e8f0; font-size:13px; outline:none; margin-bottom:14px; cursor:pointer; }
+    .login-card .lc-select option { background:#1a0414; color:#e2e8f0; }
+    .btn-login { width:100%; padding:12px; border-radius:12px; border:none; font-size:14px; font-weight:700; cursor:pointer; transition:all 0.25s; letter-spacing:0.2px; }
+    .btn-login-user  { background:linear-gradient(135deg,#E81B8C,#c4167a); color:#fff; box-shadow:0 4px 16px rgba(232,27,140,0.35); }
+    .btn-login-user:hover  { box-shadow:0 6px 22px rgba(232,27,140,0.6); transform:translateY(-1px); }
+    .btn-login-admin { background:linear-gradient(135deg,#9b59b6,#6c3483); color:#fff; box-shadow:0 4px 14px rgba(108,52,131,0.35); }
+    .btn-login-admin:hover { box-shadow:0 6px 20px rgba(108,52,131,0.55); transform:translateY(-1px); }
+    .login-divider { display:flex; align-items:center; color:rgba(255,255,255,0.3); font-size:11px; margin:10px 0; gap:8px; }
+    .login-divider::before, .login-divider::after { content:''; flex:1; height:1px; background:rgba(232,27,140,0.2); }
+    .login-footer-note { color:rgba(255,255,255,0.2); font-size:11px; margin-top:30px; position:relative; z-index:1; letter-spacing:0.3px; }
+
+    /* ─── FAQ ─── */
+    .faq-wrap { margin-bottom:24px; }
+    .faq-category { background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-bottom:16px; }
+    .faq-cat-header { padding:14px 20px; display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; color:#fff; }
+    .faq-item { border-top:1px solid #f0f2f5; }
+    .faq-question { display:flex; align-items:center; justify-content:space-between; padding:13px 20px; cursor:pointer; font-size:13px; font-weight:600; color:#2d3748; transition:background 0.15s; user-select:none; gap:10px; }
+    .faq-question:hover { background:#f7fafc; }
+    .faq-question .q-text { flex:1; }
+    .faq-chevron { font-size:12px; color:#a0aec0; transition:transform 0.2s; flex-shrink:0; }
+    .faq-item.open .faq-chevron { transform:rotate(180deg); }
+    .faq-answer { display:none; padding:0 20px 14px 20px; font-size:13px; color:#4a5568; line-height:1.7; background:#fafbfc; border-top:1px solid #f0f2f5; }
+    .faq-item.open .faq-answer { display:block; }
+    .faq-answer .ans-badge { display:inline-flex; align-items:center; gap:4px; background:#f0fff4; color:#276749; border:1px solid #9ae6b4; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; margin-right:6px; }
+    .faq-contact { background:linear-gradient(135deg,#1a1a2e,#2d2d4e); border-radius:14px; padding:20px 24px; color:#fff; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-top:8px; }
+    .faq-contact h4 { font-size:14px; font-weight:700; margin-bottom:6px; }
+    .faq-contact-chips { display:flex; gap:10px; flex-wrap:wrap; }
+    .faq-chip { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); padding:7px 14px; border-radius:20px; font-size:12px; font-weight:600; color:#fff; }
+    .faq-search-box { display:flex; align-items:center; gap:10px; background:#fff; border-radius:12px; padding:10px 16px; box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-bottom:16px; border:2px solid transparent; transition:border-color 0.2s; }
+    .faq-search-box:focus-within { border-color:#E81B8C; }
+    .faq-search-box input { flex:1; border:none; outline:none; font-size:13px; color:#2d3748; background:transparent; }
+    .faq-count-badge { display:inline-flex; align-items:center; justify-content:center; background:#f0f2f5; color:#718096; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:6px; }
+
+    /* ─── CHATBOT ─── */
+    .chat-bubble { position:fixed; bottom:24px; right:24px; z-index:9999; }
+    .chat-fab { width:58px; height:58px; border-radius:50%; background:linear-gradient(135deg,#E81B8C,#c4167a); border:none; cursor:pointer; box-shadow:0 4px 20px rgba(232,27,140,0.55); display:flex; align-items:center; justify-content:center; font-size:26px; transition:all 0.3s; position:relative; }
+    .chat-fab:hover { transform:scale(1.12); box-shadow:0 6px 28px rgba(232,27,140,0.65); }
+    .chat-fab-unread { position:absolute; top:0px; right:0px; width:16px; height:16px; background:#ff4757; border-radius:50%; border:2px solid #fff; animation:pulse 2s infinite; }
+    .chat-window { position:fixed; bottom:96px; right:24px; width:370px; height:530px; background:#fff; border-radius:20px; box-shadow:0 12px 40px rgba(0,0,0,0.18); display:flex; flex-direction:column; overflow:hidden; z-index:9998; animation:chatUp 0.3s cubic-bezier(.175,.885,.32,1.275); }
+    .chat-window.chat-hidden { display:none; }
+    @keyframes chatUp { from{opacity:0;transform:translateY(24px) scale(0.94)} to{opacity:1;transform:translateY(0) scale(1)} }
+    .chat-head { background:linear-gradient(135deg,#E81B8C,#c4167a); padding:14px 16px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+    .bot-avatar-head { width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,0.2); border:2px solid rgba(255,255,255,0.4); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+    .chat-head-info h4 { color:#fff; font-size:16px; font-weight:700; }
+    .chat-head-info p  { color:rgba(255,255,255,0.75); font-size:13px; display:flex; align-items:center; gap:4px; }
+    .online-dot { width:6px; height:6px; border-radius:50%; background:#4ade80; display:inline-block; }
+    .chat-close-btn { margin-left:auto; background:rgba(255,255,255,0.15); border:none; width:30px; height:30px; border-radius:8px; cursor:pointer; color:#fff; font-size:15px; display:flex; align-items:center; justify-content:center; transition:background 0.2s; flex-shrink:0; }
+    .chat-close-btn:hover { background:rgba(255,255,255,0.3); }
+    .chat-messages { flex:1; overflow-y:auto; padding:14px 12px; display:flex; flex-direction:column; gap:10px; background:#f7fafc; scroll-behavior:smooth; }
+    .chat-messages::-webkit-scrollbar { width:4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:4px; }
+    .cmsg { display:flex; gap:8px; max-width:88%; }
+    .cmsg.bot { align-self:flex-start; }
+    .cmsg.usr { align-self:flex-end; flex-direction:row-reverse; }
+    .cmsg-av { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#E81B8C,#c4167a); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; color:#fff; margin-top:2px; }
+    .cmsg-av.usr-av { background:linear-gradient(135deg,#667eea,#764ba2); }
+    .cmsg-body { display:flex; flex-direction:column; gap:4px; }
+    .cmsg-bubble { padding:11px 14px; border-radius:16px; font-size:14.5px; line-height:1.6; }
+    .cmsg.bot .cmsg-bubble { background:#fff; color:#2d3748; border-radius:4px 16px 16px 16px; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+    .cmsg.usr .cmsg-bubble { background:linear-gradient(135deg,#E81B8C,#c4167a); color:#fff; border-radius:16px 4px 16px 16px; }
+    .cmsg-time { font-size:12px; color:#a0aec0; padding:0 4px; }
+    .cmsg.usr .cmsg-time { text-align:right; }
+    .typing-wrap { display:flex; gap:8px; align-items:center; align-self:flex-start; }
+    .typing-box { background:#fff; border-radius:4px 16px 16px 16px; padding:11px 15px; box-shadow:0 1px 4px rgba(0,0,0,0.08); display:flex; gap:5px; align-items:center; }
+    .tdot { width:7px; height:7px; border-radius:50%; background:#cbd5e0; animation:tdotBounce 1.2s infinite; }
+    .tdot:nth-child(2){animation-delay:0.18s}
+    .tdot:nth-child(3){animation-delay:0.36s}
+    @keyframes tdotBounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+    .result-card { background:#f0fff4; border:1px solid #9ae6b4; border-radius:10px; padding:10px 13px; margin-top:5px; font-size:13.5px; cursor:pointer; transition:background 0.15s; }
+    .result-card:hover { background:#dcfce7; }
+    .result-card .rc-q { font-weight:700; color:#276749; margin-bottom:5px; font-size:13.5px; }
+    .result-card .rc-a { color:#374151; line-height:1.55; }
+    .policy-card-bot { background:#fff0f8; border:1px solid rgba(232,27,140,0.25); border-radius:10px; padding:10px 13px; margin-top:5px; font-size:13.5px; }
+    .policy-card-bot .rc-q { font-weight:700; color:#c4167a; margin-bottom:5px; }
+    .policy-card-bot .rc-a { color:#374151; line-height:1.55; }
+    .chat-footer { padding:10px 12px 12px; background:#fff; border-top:1px solid #f0f2f5; flex-shrink:0; }
+    .quick-btns { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:9px; }
+    /* Main level buttons — larger & bolder */
+    .qbtn { padding:7px 14px; border-radius:16px; border:1.5px solid #E81B8C; background:#fff0f8; color:#c4167a; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:all 0.15s; }
+    .qbtn:hover { background:#E81B8C; color:#fff; }
+    .qbtn-main { padding:9px 20px; font-size:14px; border-radius:20px; border-width:2px; }
+    .qbtn-back { border-color:#718096; background:#f7fafc; color:#4a5568; }
+    .qbtn-back:hover { background:#718096; color:#fff; }
+    .chat-input-row { display:flex; gap:8px; align-items:center; }
+    .chat-input-row input { flex:1; padding:10px 16px; border:1.5px solid #e2e8f0; border-radius:22px; font-size:14px; outline:none; transition:border-color 0.2s; font-family:inherit; background:#f7fafc; }
+    .chat-input-row input:focus { border-color:#E81B8C; background:#fff; }
+    .chat-send-btn { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,#E81B8C,#c4167a); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px; flex-shrink:0; transition:all 0.2s; }
+    .chat-send-btn:hover { transform:scale(1.1); box-shadow:0 3px 10px rgba(232,27,140,0.45); }
+    @media(max-width:500px){ .chat-window{width:calc(100vw - 20px);right:10px;bottom:80px;} }
+
+    /* ─── MYBIZ EMAIL MODAL ─── */
+    .mybiz-sent-banner { background:#f0fff4; border:1px solid #9ae6b4; border-radius:10px; padding:11px 16px; display:flex; align-items:center; gap:10px; font-size:13px; color:#276749; margin-bottom:18px; font-weight:600; }
+    .mybiz-email-preview { border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.07); }
+    .mybiz-email-head { background:linear-gradient(135deg,#E81B8C,#c4167a); padding:22px 24px; text-align:center; }
+    .mybiz-email-head h2 { color:#fff; font-size:15px; font-weight:700; margin:10px 0 4px; }
+    .mybiz-email-head p  { color:rgba(255,255,255,0.78); font-size:11px; }
+    .mybiz-email-body { background:#fafbfc; padding:20px 24px; }
+    .mybiz-meta-table { width:100%; border-collapse:collapse; margin:12px 0 16px; }
+    .mybiz-meta-table td { padding:8px 10px; font-size:12px; border-bottom:1px solid #edf2f7; }
+    .mybiz-meta-table td:first-child { color:#718096; font-weight:600; width:38%; }
+    .mybiz-meta-table td:last-child  { color:#1a1a2e; font-weight:700; }
+    .mybiz-note { background:#fffbeb; border:1px solid #fbd38d; border-radius:8px; padding:10px 14px; font-size:11px; color:#744210; margin:12px 0; line-height:1.6; }
+    .btn-mybiz-book { display:block; width:100%; padding:13px; background:linear-gradient(135deg,#E81B8C,#c4167a); color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; text-align:center; margin-top:14px; text-decoration:none; box-shadow:0 4px 14px rgba(232,27,140,0.35); transition:all 0.2s; }
+    .btn-mybiz-book:hover { box-shadow:0 6px 20px rgba(232,27,140,0.5); transform:translateY(-1px); }
+    .mybiz-footer-note { font-size:10px; color:#a0aec0; text-align:center; margin-top:12px; }
+    .mybiz-to-chip { display:inline-flex; align-items:center; gap:6px; background:#f0f2f5; border:1px solid #e2e8f0; padding:4px 12px; border-radius:20px; font-size:12px; color:#4a5568; margin-bottom:14px; }
+
+    /* ─── TRAVEL POLICY ─── */
+    .policy-wrap { background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-bottom:20px; }
+    .policy-header { background:linear-gradient(135deg,#E81B8C,#c4167a); color:#fff; padding:16px 20px; }
+    .policy-header h3 { font-size:16px; font-weight:700; }
+    .policy-header p { font-size:12px; opacity:0.8; margin-top:4px; }
+    .policy-card { padding:20px; }
+    .policy-table { width:100%; border-collapse:collapse; margin-top:8px; }
+    .policy-table th { background:#f7fafc; color:#4a5568; font-size:12px; font-weight:700; text-transform:uppercase; padding:10px 14px; text-align:left; border-bottom:2px solid #e2e8f0; }
+    .policy-table td { padding:12px 14px; font-size:13px; color:#2d3748; border-bottom:1px solid #f0f2f5; vertical-align:middle; }
+    .policy-table tr:last-child td { border-bottom:none; }
+    .policy-table tr:hover td { background:#f7fafc; }
+    .policy-pill { display:inline-flex; align-items:center; gap:6px; background:#fff0f8; color:#E81B8C; border:1px solid rgba(232,27,140,0.2); padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; white-space:nowrap; }
+    .policy-note { background:#fffbeb; border:1px solid #fbd38d; border-radius:10px; padding:12px 16px; font-size:12px; color:#744210; margin-top:16px; line-height:1.6; }
+    .policy-sec-title { font-size:13px; font-weight:700; color:#4a5568; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #e2e8f0; }
+
+    /* ─── TOAST ─── */
+    .toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); z-index:99999; padding:12px 22px; border-radius:12px; font-size:13px; font-weight:600; color:#fff; box-shadow:0 6px 20px rgba(0,0,0,0.18); display:flex; align-items:center; gap:8px; animation:toastIn 0.3s ease; white-space:nowrap; }
+    .toast-success { background:linear-gradient(135deg,#38a169,#276749); }
+    .toast-error   { background:linear-gradient(135deg,#e53e3e,#c53030); }
+    @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(16px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+
+    /* ─── FOOTER ─── */
+    .footer { text-align:center; padding:16px; color:#a0aec0; font-size:12px; }
+
+    /* ─── RESPONSIVE ─── */
+    @media(max-width:900px){
+      .stats-row{grid-template-columns:repeat(2,1fr);}
+      .modal-panel{width:100%;}
+      .analytics-grid{grid-template-columns:1fr;}
+    }
+    @media(max-width:500px){
+      .stats-row{grid-template-columns:1fr;}
+      .form-row{grid-template-columns:1fr;}
+      .detail-grid{grid-template-columns:1fr;}
+      .login-cards{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════ NAVBAR ══════════════ -->
+<nav class="navbar" style="display:none">
+  <div class="brand">
+    <div class="logo"><img src="wiom-logo.webp" alt="Wiom" style="width:38px;height:38px;object-fit:cover;border-radius:10px;"/></div>
+    <div><h1>Wiom Nomad</h1><span>Travel Desk — Omnia Information Pvt. Ltd.</span></div>
+  </div>
+  <div class="nav-right">
+    <button class="btn-reset" onclick="resetDemo()">↺ Reset</button>
+    <div class="user-chip">
+      <div class="avatar" id="navAvatar">GK</div>
+      <div id="notifBadge" class="notif-badge" style="display:none">0</div>
+      <div><p id="navName">Gaurav Kumar</p><span id="navRole">Travel Desk</span></div>
+    </div>
+    <button class="btn-logout" onclick="logout()">⬅ Logout</button>
+  </div>
+</nav>
+
+<!-- ══════════════ LOGIN SCREEN ══════════════ -->
+<div class="login-screen" id="loginScreen">
+  <!-- Animated background orbs -->
+  <div class="login-orb orb-1"></div>
+  <div class="login-orb orb-2"></div>
+  <div class="login-orb orb-3"></div>
+
+  <!-- Brand header -->
+  <div class="login-logo">
+    <div class="logo-box"><img src="wiom-logo.webp" alt="Wiom" style="width:100%;height:100%;object-fit:cover;"/></div>
+    <div>
+      <h1>Wiom Nomad</h1>
+      <p>Travel Desk — Omnia Information Pvt. Ltd.</p>
+    </div>
+  </div>
+
+  <!-- Tagline pills -->
+  <div class="login-tagline">
+    <span class="login-tagline-pill">✈️ Flight</span>
+    <span class="login-tagline-pill">🚂 Train</span>
+    <span class="login-tagline-pill">🚌 Bus</span>
+    <span class="login-tagline-pill">🏨 Hotel</span>
+    <span style="color:rgba(255,255,255,0.3);margin:0 2px;">—</span>
+    <span style="color:rgba(255,255,255,0.5);font-style:italic;">Work hard. Roam free.</span>
+  </div>
+
+  <!-- Login cards -->
+  <div class="login-cards">
+    <div class="login-card">
+      <span class="lc-icon">👤</span>
+      <h3>Employee / Manager</h3>
+      <p>Submit travel requests, track approvals, and manage your bookings with ease</p>
+      <select class="lc-select" id="userLoginSelect"></select>
+      <button class="btn-login btn-login-user" onclick="loginAsUser()">Login →</button>
+    </div>
+    <div class="login-card">
+      <span class="lc-icon">🎫</span>
+      <h3>Admin — Travel Desk</h3>
+      <p>Process approved bookings, manage all travel requests across the organization</p>
+      <div class="login-divider">Travel Desk Access</div>
+      <div style="background:rgba(0,0,0,0.25);border-radius:10px;padding:12px;margin-bottom:14px;text-align:left;border:1px solid rgba(255,255,255,0.06);">
+        <p style="color:#a0aec0;font-size:11px;margin-bottom:3px;">Logged in as</p>
+        <p style="color:#fff;font-size:14px;font-weight:700;">Gaurav Kumar</p>
+        <p style="color:#718096;font-size:11px;">gaurav.kumar@wiom.in</p>
+      </div>
+      <button class="btn-login btn-login-admin" onclick="loginAsAdmin()">Login as Admin →</button>
+    </div>
+  </div>
+
+  <!-- Footer note -->
+  <p class="login-footer-note">🔒 Secure internal portal &nbsp;•&nbsp; Omnia Information Pvt. Ltd. &nbsp;•&nbsp; v2.0</p>
+</div>
+
+<div class="container" id="mainContainer" style="display:none"></div>
+
+<!-- ══════════════ NEW REQUEST PANEL ══════════════ -->
+<div class="modal-overlay" id="newReqOverlay" onclick="handleNewOverlayClick(event)">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <div>
+        <h3 id="formTitle">✈️ New Travel Request</h3>
+        <p style="font-size:12px;color:#718096;margin-top:4px;">Fill in the details — your manager will be notified</p>
+      </div>
+      <button class="close-btn" onclick="closeNewReq()">✕</button>
+    </div>
+    <form id="travelForm" onsubmit="submitRequest(event)">
+      <div class="form-section">
+        <div class="form-section-title">👤 Traveler Information</div>
+        <div class="form-row">
+          <div class="form-group"><label>Employee Name</label><input type="text" id="f_name" readonly/></div>
+          <div class="form-group"><label>Department</label><input type="text" id="f_dept" readonly/></div>
+        </div>
+        <div style="display:none"><input type="text" id="f_manager" readonly/><input type="text" id="f_fhead" readonly/></div>
+        <div class="form-row">
+          <div class="form-group"><label>Purpose of Travel *</label><input type="text" id="f_purpose" placeholder="e.g., Client Meeting, Training, Site Visit" required/></div>
+          <div class="form-group"><label>No. of Travelers *</label>
+            <select id="f_travelers"><option>1</option><option>2</option><option>3</option><option>4</option><option>5+</option></select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:4px;">
+          <label>⚡ Priority / Urgency</label>
+          <div class="priority-opts">
+            <div class="priority-opt sel-normal" id="popt_Normal" onclick="selectPriority('Normal')">📋 Normal</div>
+            <div class="priority-opt" id="popt_Urgent" onclick="selectPriority('Urgent')">⚡ Urgent</div>
+            <div class="priority-opt" id="popt_Emergency" onclick="selectPriority('Emergency')">🚨 Emergency</div>
+          </div>
+          <input type="hidden" id="f_priority" value="Normal"/>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">🗂️ What Do You Need? <span style="text-transform:none;font-weight:400;color:#a0aec0;">(1 travel mode + hotel optional)</span></div>
+        <div class="travel-types">
+          <label class="travel-type-btn" id="type_flight" onclick="toggleType('flight')">✈️ Flight</label>
+          <label class="travel-type-btn" id="type_train"  onclick="toggleType('train')">🚂 Train</label>
+          <label class="travel-type-btn" id="type_bus"    onclick="toggleType('bus')">🚌 Bus</label>
+          <label class="travel-type-btn" id="type_hotel"  onclick="toggleType('hotel')">🏨 Hotel</label>
+        </div>
+      </div>
+
+      <div class="form-section" id="sec_travelRoute">
+        <div class="form-section-title">📅 Travel Dates & Route</div>
+        <div class="form-row">
+          <div class="form-group"><label>Travel Date *</label><input type="date" id="f_travelDate" required onchange="setMinDate('f_travelDate','f_returnDate')"/></div>
+          <div class="form-group"><label>Return Date</label><input type="date" id="f_returnDate"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>From City *</label><input type="text" id="f_from" placeholder="Departure city" required/></div>
+          <div class="form-group"><label>To City *</label><input type="text" id="f_to" placeholder="Destination city" required/></div>
+        </div>
+        <div class="form-row" id="returnTimeRow" style="display:none;">
+          <div class="form-group">
+            <label>↩️ Preferred Return Time</label>
+            <select id="f_returnTime" onchange="toggleCustomTime('f_returnTime','f_returnCustomTime')">
+              <option>Early Morning (5–8 AM)</option><option>Morning (8–12 PM)</option>
+              <option>Afternoon (12–5 PM)</option><option>Evening (5–9 PM)</option>
+              <option>Night (9 PM+)</option><option>Flexible</option>
+              <option value="custom">⏰ Enter Own Time...</option>
+            </select>
+            <input type="time" id="f_returnCustomTime" style="display:none;margin-top:8px;padding:9px 12px;border:1px solid #e94560;border-radius:8px;font-size:13px;outline:none;background:#fff;width:100%;"/>
+          </div>
+          <div class="form-group"></div>
+        </div>
+      </div>
+
+      <div class="cond-section" id="sec_flight">
+        <div class="cond-title">✈️ FLIGHT DETAILS</div>
+        <div class="form-row full"><div class="form-group">
+          <label>Preferred Departure Time</label>
+          <select id="f_fTime" onchange="toggleCustomTime('f_fTime','f_fCustomTime')">
+            <option>Early Morning (5–8 AM)</option><option>Morning (8–12 PM)</option>
+            <option>Afternoon (12–5 PM)</option><option>Evening (5–9 PM)</option>
+            <option>Night (9 PM+)</option><option>Flexible</option>
+            <option value="custom">⏰ Enter Own Time...</option>
+          </select>
+          <input type="time" id="f_fCustomTime" style="display:none;margin-top:8px;padding:9px 12px;border:1px solid #e94560;border-radius:8px;font-size:13px;outline:none;background:#fff;width:100%;"/>
+        </div></div>
+      </div>
+
+      <div class="cond-section" id="sec_train">
+        <div class="cond-title">🚂 TRAIN DETAILS</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Preferred Departure Time</label>
+            <select id="f_tTime" onchange="toggleCustomTime('f_tTime','f_tCustomTime')">
+              <option>Morning (6–12 PM)</option><option>Afternoon (12–6 PM)</option>
+              <option>Evening (6–10 PM)</option><option>Night / Overnight</option>
+              <option>Flexible</option><option value="custom">⏰ Enter Own Time...</option>
+            </select>
+            <input type="time" id="f_tCustomTime" style="display:none;margin-top:8px;padding:9px 12px;border:1px solid #e94560;border-radius:8px;font-size:13px;outline:none;background:#fff;width:100%;"/>
+          </div>
+          <div class="form-group"><label>Travel Class</label>
+            <select id="f_tClass"><option>Sleeper (SL)</option><option>AC 3 Tier (3A)</option><option>AC 2 Tier (2A)</option><option>AC 1st Class (1A)</option><option>Chair Car (CC)</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="cond-section" id="sec_bus">
+        <div class="cond-title">🚌 BUS DETAILS</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Preferred Departure Time</label>
+            <select id="f_bTime" onchange="toggleCustomTime('f_bTime','f_bCustomTime')">
+              <option>Morning</option><option>Afternoon</option><option>Evening</option>
+              <option>Night / Overnight</option><option>Flexible</option>
+              <option value="custom">⏰ Enter Own Time...</option>
+            </select>
+            <input type="time" id="f_bCustomTime" style="display:none;margin-top:8px;padding:9px 12px;border:1px solid #e94560;border-radius:8px;font-size:13px;outline:none;background:#fff;width:100%;"/>
+          </div>
+          <div class="form-group"><label>Bus Type</label>
+            <select id="f_bType"><option>AC Sleeper</option><option>AC Seater</option><option>Non-AC Sleeper</option><option>Non-AC Seater</option><option>Volvo AC</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="cond-section" id="sec_hotel">
+        <div class="cond-title">🏨 HOTEL DETAILS</div>
+        <div class="form-row">
+          <div class="form-group"><label>Hotel City / Location *</label><input type="text" id="f_hCity" placeholder="City or specific area"/></div>
+          <div class="form-group"><label>Room Type</label>
+            <select id="f_hRoom"><option>Single Room</option><option>Double Room</option><option>Twin Sharing</option><option>Suite</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Check-in Date</label><input type="date" id="f_hCheckin" onchange="setMinDate('f_hCheckin','f_hCheckout')"/></div>
+          <div class="form-group"><label>Check-out Date</label><input type="date" id="f_hCheckout"/></div>
+        </div>
+        <div class="form-row full"><div class="form-group"><label>Hotel Preferences</label><input type="text" id="f_hPref" placeholder="e.g., near office, budget range, amenities"/></div></div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">📝 Additional Notes</div>
+        <div class="form-row full"><div class="form-group"><label>Special Requirements / Notes</label>
+          <textarea id="f_notes" placeholder="Any special requirements, medical needs, or additional info..."></textarea>
+        </div></div>
+      </div>
+
+      <input type="hidden" id="f_editId" value=""/>
+      <div class="form-footer">
+        <button type="button" class="btn-secondary" onclick="closeNewReq()">Cancel</button>
+        <button type="submit" class="btn-primary" id="formSubmitBtn">🚀 Submit Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════ DETAIL PANEL ══════════════ -->
+<div class="modal-overlay" id="detailOverlay" onclick="handleDetailOverlayClick(event)">
+  <div class="modal-panel" id="detailPanel"></div>
+</div>
+
+<!-- ══════════════ APPROVE MODAL ══════════════ -->
+<div class="mini-overlay" id="approveModal">
+  <div class="mini-box approve-box">
+    <h3>✅ Approve Request</h3>
+    <p style="font-size:12px;color:#718096;margin-bottom:14px;">Add an optional comment before approving.</p>
+    <textarea class="mini-textarea" id="approveComment" placeholder="Optional comment..."></textarea>
+    <div class="mini-footer">
+      <button class="btn-secondary" onclick="closeApproveModal()">Cancel</button>
+      <button class="btn-approve" style="padding:10px 20px;" onclick="confirmApprove()">✓ Confirm Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ REJECT MODAL ══════════════ -->
+<div class="mini-overlay" id="rejectModal">
+  <div class="mini-box reject-box">
+    <h3>❌ Reject Request</h3>
+    <p style="font-size:12px;color:#718096;margin-bottom:14px;">Please provide a reason for rejection.</p>
+    <textarea class="mini-textarea" id="rejectReason" placeholder="Reason for rejection (required)..."></textarea>
+    <div class="mini-footer">
+      <button class="btn-secondary" onclick="closeRejectModal()">Cancel</button>
+      <button class="btn-reject" style="padding:10px 20px;" onclick="confirmReject()">✕ Confirm Reject</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PROCESS MODAL ══════════════ -->
+<div class="mini-overlay" id="processModal">
+  <div class="mini-box process-box">
+    <h3>🎫 Process Booking</h3>
+    <p style="font-size:12px;color:#718096;margin-bottom:14px;">Enter booking details to mark as processed.</p>
+    <label style="font-size:12px;font-weight:600;color:#4a5568;display:block;margin-bottom:5px;">Booking Reference / PNR</label>
+    <input class="mini-input" type="text" id="bookingRef" placeholder="e.g., PNR12345, HOTEL-CONF-678"/>
+    <label style="font-size:12px;font-weight:600;color:#4a5568;display:block;margin-bottom:5px;">Booking Notes</label>
+    <textarea class="mini-textarea" id="processNotes" placeholder="e.g., IndiGo 6E-302 | Hotel: Lemon Tree confirmed"></textarea>
+    <div class="mini-footer">
+      <button class="btn-secondary" onclick="closeProcessModal()">Cancel</button>
+      <button class="btn-process" style="padding:10px 20px;" onclick="confirmProcess()">✅ Mark Processed</button>
+    </div>
+  </div>
+</div>
+
+<div class="footer" style="display:none">Wiom Nomad &nbsp;|&nbsp; Omnia Information Pvt. Ltd. &nbsp;|&nbsp; v2.0</div>
+
+<!-- ══════════════ MYBIZ EMAIL MODAL ══════════════ -->
+<div class="modal-overlay" id="mybizEmailOverlay" onclick="handleMybizOverlayClick(event)">
+  <div class="modal-panel" style="max-width:540px;">
+    <div class="modal-header" style="background:linear-gradient(135deg,#E81B8C,#c4167a);color:#fff;">
+      <div>
+        <h3 style="color:#fff;">📧 MyBiz Email Sent!</h3>
+        <p style="font-size:12px;color:rgba(255,255,255,0.78);margin-top:3px;">Employee ko self-booking ka link bhej diya gaya hai</p>
+      </div>
+      <button class="close-btn" style="color:#fff;background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);" onclick="closeMyBizModal()">✕</button>
+    </div>
+    <div style="padding:20px;" id="mybizEmailContent"></div>
+  </div>
+</div>
+
+<!-- ══════════════ CHATBOT ══════════════ -->
+<div class="chat-bubble" id="chatBubble" style="display:none">
+  <!-- Floating Button -->
+  <button class="chat-fab" id="chatFab" onclick="toggleChat()" title="Nomad Assistant">
+    <span id="chatFabIcon">💬</span>
+    <span class="chat-fab-unread" id="chatUnread" style="display:none"></span>
+  </button>
+
+  <!-- Chat Window -->
+  <div class="chat-window chat-hidden" id="chatWindow">
+    <!-- Header -->
+    <div class="chat-head">
+      <div class="bot-avatar-head">🤖</div>
+      <div class="chat-head-info">
+        <h4>Nomad Assistant 🧳</h4>
+        <p><span class="online-dot"></span> Online &nbsp;•&nbsp; Instant replies</p>
+      </div>
+      <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+    </div>
+
+    <!-- Messages -->
+    <div class="chat-messages" id="chatMessages"></div>
+
+    <!-- Footer -->
+    <div class="chat-footer">
+      <div class="quick-btns" id="quickBtns">
+        <button class="qbtn qbtn-main" onclick="showPolicyMenu()">📜 Travel Policy</button>
+        <button class="qbtn qbtn-main" onclick="showFAQMenu()">❓ FAQ</button>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Ask about travel policy, FAQ..." onkeydown="if(event.key==='Enter')sendChat()" />
+        <button class="chat-send-btn" onclick="sendChat()">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ USERS ═══
+const USERS = [
+  // ── Wiom HR Team ──
+  { id:'U010', name:'Sneha Ghildiyal',     email:'sneha.ghildiyal@wiom.in',     dept:'HR',    role:'employee',      manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'SG' },
+  { id:'U011', name:'Sajan Kumar',         email:'sajan.kumar@wiom.in',          dept:'HR',    role:'employee',      manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'SK' },
+  { id:'U012', name:'Pramod',              email:'pramod@wiom.in',               dept:'HR',    role:'employee',      manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'P'  },
+  { id:'U013', name:'Devashish Mukherjee', email:'devashish.mukherjee@wiom.in',  dept:'HR',    role:'manager',       functionHead:'Garima Makkar', initials:'DM' },
+  { id:'U014', name:'Garima Makkar',       email:'garima.makkar@wiom.in',        dept:'HR',    role:'function_head', initials:'GM' },
+  { id:'U009', name:'Gaurav Kumar',        email:'gaurav.kumar@wiom.in',         dept:'Admin', role:'travel_desk',   initials:'GK' },
+];
+
+const ROLE_LABELS = { employee:'👤 Employee', manager:'👔 Manager', function_head:'🏢 Function Head', travel_desk:'🎫 Travel Desk' };
+
+// ═══ SEED DATA ═══
+const SEED = [
+  { id:'REQ-001', employeeId:'U010', employeeName:'Sneha Ghildiyal', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Flight'], purpose:'HR Compliance Workshop – Bangalore', travelers:'1', fromCity:'Delhi', toCity:'Bangalore', travelDate:'2026-06-05', returnDate:'2026-06-07', flight:{time:'Morning (8–12 PM)'}, notes:'Annual compliance workshop, mandatory attendance.', priority:'Normal', status:'PENDING_MANAGER', comments:[], history:[{action:'SUBMITTED',by:'Sneha Ghildiyal',role:'Employee',date:'2026-05-28',comment:''}], createdAt:'2026-05-28T10:00:00' },
+  { id:'REQ-002', employeeId:'U011', employeeName:'Sajan Kumar', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Train','Hotel'], purpose:'Recruitment Drive – Lucknow', travelers:'1', fromCity:'Delhi', toCity:'Lucknow', travelDate:'2026-06-08', returnDate:'2026-06-10', train:{time:'Morning (6–12 PM)',class:'AC 2 Tier (2A)'}, hotel:{city:'Lucknow', roomType:'Single Room', checkin:'2026-06-08', checkout:'2026-06-10', pref:'Near Hazratganj'}, notes:'Campus recruitment at 2 colleges.', priority:'Urgent', status:'PENDING_FUNCTION_HEAD', comments:[{id:'c1',by:'Devashish Mukherjee',role:'Manager',text:'Approved. Coordinate with college POCs.',date:'2026-05-29'}], history:[{action:'SUBMITTED',by:'Sajan Kumar',role:'Employee',date:'2026-05-27',comment:''},{action:'APPROVED BY MANAGER',by:'Devashish Mukherjee',role:'Manager',date:'2026-05-29',comment:'Approved. Coordinate with college POCs.'}], createdAt:'2026-05-27T09:00:00' },
+  { id:'REQ-003', employeeId:'U012', employeeName:'Pramod', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Bus'], purpose:'Payroll Audit – Noida Office', travelers:'1', fromCity:'Delhi', toCity:'Noida', travelDate:'2026-06-03', returnDate:'2026-06-03', bus:{time:'Morning',type:'Volvo AC'}, notes:'One-day audit, same-day return.', priority:'Normal', status:'PENDING_TRAVEL_DESK', comments:[], history:[{action:'SUBMITTED',by:'Pramod',role:'Employee',date:'2026-05-25',comment:''},{action:'APPROVED BY MANAGER',by:'Devashish Mukherjee',role:'Manager',date:'2026-05-26',comment:'Approved.'},{action:'APPROVED BY FUNCTION HEAD',by:'Garima Makkar',role:'Function Head',date:'2026-05-27',comment:'Approved. Keep it within budget.'}], createdAt:'2026-05-25T11:00:00' },
+  { id:'REQ-004', employeeId:'U013', employeeName:'Devashish Mukherjee', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Flight','Hotel'], purpose:'HR Leadership Summit – Mumbai', travelers:'1', fromCity:'Delhi', toCity:'Mumbai', travelDate:'2026-06-12', returnDate:'2026-06-14', flight:{time:'Afternoon (12–5 PM)'}, hotel:{city:'Mumbai', roomType:'Single Room', checkin:'2026-06-12', checkout:'2026-06-14', pref:'BKC or Nariman Point'}, notes:'National HR summit, representing Wiom.', priority:'Urgent', status:'PENDING_FUNCTION_HEAD', comments:[], history:[{action:'SUBMITTED',by:'Devashish Mukherjee',role:'Manager',date:'2026-05-28',comment:''}], createdAt:'2026-05-28T14:00:00' },
+  { id:'REQ-005', employeeId:'U010', employeeName:'Sneha Ghildiyal', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Flight'], purpose:'Employee Onboarding – Hyderabad Branch', travelers:'1', fromCity:'Delhi', toCity:'Hyderabad', travelDate:'2026-05-10', returnDate:'2026-05-11', flight:{time:'Early Morning (5–8 AM)'}, notes:'', priority:'Normal', status:'PROCESSED', bookingRef:'INDIGO-6E445', bookingNotes:'IndiGo 6E-445 | Dep 06:05 | Hotel: Ibis confirmed', comments:[], history:[{action:'SUBMITTED',by:'Sneha Ghildiyal',role:'Employee',date:'2026-05-01',comment:''},{action:'APPROVED BY MANAGER',by:'Devashish Mukherjee',role:'Manager',date:'2026-05-02',comment:'Approved.'},{action:'APPROVED BY FUNCTION HEAD',by:'Garima Makkar',role:'Function Head',date:'2026-05-03',comment:'Approved.'},{action:'PROCESSED BY TRAVEL DESK',by:'Gaurav Kumar',role:'Travel Desk',date:'2026-05-04',comment:'Booked. Ref: INDIGO-6E445'}], createdAt:'2026-05-01T08:00:00' },
+];
+
+// ═══ STATE ═══
+let currentUser = null;
+let requests    = [];
+let selTypes    = [];
+let pendingAct  = null;
+let detailReqId = null;
+let secTab      = 'pending';
+let calMonth    = new Date().getMonth();
+let calYear     = new Date().getFullYear();
+let chartInstances = {};
+
+// ═══ INIT ═══
+function init() {
+  const stored = localStorage.getItem('wiom_travel_v3');
+  requests = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(SEED));
+  if (!stored) save();
+
+  const normalUsers = USERS.filter(u => u.role !== 'travel_desk');
+  document.getElementById('userLoginSelect').innerHTML = normalUsers.map(u =>
+    `<option value="${u.id}">${u.name} — ${ROLE_LABELS[u.role]}</option>`
+  ).join('');
+}
+
+function save() { localStorage.setItem('wiom_travel_v3', JSON.stringify(requests)); }
+
+function resetDemo() {
+  if (!confirm('Reset all data to demo state?')) return;
+  localStorage.removeItem('wiom_travel_v3');
+  requests = JSON.parse(JSON.stringify(SEED));
+  save(); secTab='pending'; render();
+}
+
+// ═══ LOGIN ═══
+function loginAsUser() {
+  const id = document.getElementById('userLoginSelect').value;
+  currentUser = USERS.find(u => u.id === id);
+  secTab = 'pending'; enterPortal();
+}
+function loginAsAdmin() {
+  currentUser = USERS.find(u => u.role === 'travel_desk');
+  secTab = 'pending'; enterPortal();
+}
+function enterPortal() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.querySelector('.navbar').style.display   = 'flex';
+  document.getElementById('mainContainer').style.display = 'block';
+  document.querySelector('.footer').style.display   = 'block';
+  render();
+  // Show chatbot bubble after login
+  showChatBubble();
+}
+// ── Date validation: end date must be >= start date ──
+function setMinDate(fromId, toId) {
+  const from = document.getElementById(fromId);
+  const to   = document.getElementById(toId);
+  if (!from || !to) return;
+  const val = from.value;
+  if (!val) return;
+  to.min = val;
+  // If current 'to' value is earlier, clear it
+  if (to.value && to.value < val) {
+    to.value = '';
+    showToast(`⚠️ ${toId === 'f_returnDate' ? 'Return' : 'Check-out'} date cannot be before ${toId === 'f_returnDate' ? 'travel' : 'check-in'} date — please re-select.`, 'error');
+  }
+}
+
+// ── Toast notification (replaces alert) ──
+function showToast(msg, type='success') {
+  const old = document.getElementById('toastMsg');
+  if (old) old.remove();
+  const t = document.createElement('div');
+  t.id = 'toastMsg';
+  t.className = `toast toast-${type}`;
+  t.innerHTML = (type==='success' ? '✅ ' : '❌ ') + msg;
+  document.body.appendChild(t);
+  setTimeout(() => { if(t.parentNode) t.remove(); }, 3500);
+}
+
+function logout() {
+  secTab='pending';
+  chatGreeted = false; chatOpen = false; chatHistory = [];
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.querySelector('.navbar').style.display='none';
+  document.getElementById('mainContainer').style.display='none';
+  document.querySelector('.footer').style.display='none';
+  document.getElementById('chatBubble').style.display='none';
+  document.getElementById('chatWindow').classList.add('chat-hidden');
+  document.getElementById('chatFabIcon').textContent='💬';
+  document.getElementById('chatMessages').innerHTML='';
+}
+
+// ═══ RENDER ═══
+function render() {
+  document.getElementById('navAvatar').textContent = currentUser.initials;
+  document.getElementById('navName').textContent   = currentUser.name;
+  document.getElementById('navRole').textContent   = ROLE_LABELS[currentUser.role];
+  updateNotifBadge();
+  const c = document.getElementById('mainContainer');
+  const r = currentUser.role;
+  if      (r==='employee')      renderEmployee(c);
+  else if (r==='manager')       renderManager(c);
+  else if (r==='function_head') renderFunctionHead(c);
+  else                          renderTravelDesk(c);
+}
+
+function updateNotifBadge() {
+  const role = currentUser.role;
+  let count = 0;
+  if (role==='manager')       count = requests.filter(r=>r.manager===currentUser.name && r.status==='PENDING_MANAGER').length;
+  if (role==='function_head') count = requests.filter(r=>r.functionHead===currentUser.name && r.status==='PENDING_FUNCTION_HEAD').length;
+  if (role==='travel_desk')   count = requests.filter(r=>r.status==='PENDING_TRAVEL_DESK').length;
+  if (role==='employee')      count = requests.filter(r=>r.employeeId===currentUser.id && !['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length;
+  const badge = document.getElementById('notifBadge');
+  if (count > 0) { badge.textContent=count; badge.style.display='flex'; }
+  else { badge.style.display='none'; }
+}
+
+// ─── WORKFLOW BANNER ───
+function wfBanner(activeStep, stepsOverride) {
+  const steps = stepsOverride || [
+    {label:'Employee',  color:'#3182ce'},
+    {label:'Manager',   color:'#dd6b20'},
+    {label:'Func. Head',color:'#805ad5'},
+    {label:'Travel Desk',color:'#276749'}
+  ];
+  return `<div class="workflow-banner"><span style="font-size:11px;font-weight:700;color:#a0aec0;margin-right:4px;">WORKFLOW:</span>
+    ${steps.map((s,i)=>`${i>0?'<span class="wf-arrow">→</span>':''}
+    <span class="wf-step" style="background:${i+1===activeStep?s.color+'22':'#f0f2f5'};color:${i+1===activeStep?s.color:'#718096'};${i+1===activeStep?'font-weight:800;':''}">
+      ${i+1===activeStep?'●':i+1<activeStep?'✓':'○'} ${s.label}
+    </span>`).join('')}
+  </div>`;
+}
+
+// ─── EMPLOYEE VIEW ───
+function renderEmployee(c) {
+  const mine = requests.filter(r=>r.employeeId===currentUser.id).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const inProg = mine.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length;
+  c.innerHTML = `
+    ${wfBanner(1)}
+    <div class="page-header">
+      <div><h2>My Travel Requests</h2><p>Submit and track your travel booking requests</p></div>
+      <button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${mine.length}</h3><p>Total Requests</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${inProg}</h3><p>In Progress</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>r.status==='PROCESSED').length}</h3><p>Processed</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>['REJECTED','CANCELLED'].includes(r.status)).length}</h3><p>Rejected/Cancelled</p></div></div>
+    </div>
+    <div class="section-tabs">
+      <button class="sec-tab ${secTab==='all'?'active':''}" onclick="setTab('all')">📋 All (${mine.length})</button>
+      <button class="sec-tab ${secTab==='pending'?'active':''}" onclick="setTab('pending')">⏳ In Progress <span class="tab-count">${inProg}</span></button>
+      <button class="sec-tab ${secTab==='done'?'active':''}" onclick="setTab('done')">✅ Completed (${mine.filter(r=>['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length})</button>
+      <button class="sec-tab ${secTab==='policy'?'active':''}" onclick="setTab('policy')">📜 Travel Policy</button>
+      <button class="sec-tab ${secTab==='faq'?'active':''}" onclick="setTab('faq')">❓ FAQ</button>
+    </div>
+    ${secTab==='policy' ? renderTravelPolicy() : secTab==='faq' ? renderFAQ() : `<div class="requests-grid">
+      ${(secTab==='pending'?mine.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status)):secTab==='done'?mine.filter(r=>['PROCESSED','REJECTED','CANCELLED'].includes(r.status)):mine)
+        .map(r=>reqCard(r,'employee')).join('') || `<div class="empty-state"><div class="e-icon">✈️</div><p>No requests here.<br>Click <b>"New Travel Request"</b> to get started!</p></div>`}
+    </div>`}`;
+}
+
+// ─── MANAGER VIEW ───
+function renderManager(c) {
+  const mine    = requests.filter(r=>r.manager===currentUser.name).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const pend    = mine.filter(r=>r.status==='PENDING_MANAGER');
+  const myReqs  = requests.filter(r=>r.employeeId===currentUser.id).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const myInProg = myReqs.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length;
+  const show    = secTab==='all' ? mine : secTab==='myreqs' ? myReqs : (secTab==='policy'||secTab==='faq') ? [] : pend;
+  c.innerHTML = `
+    ${wfBanner(1,[{label:'Manager',color:'#dd6b20'},{label:'Func. Head',color:'#805ad5'},{label:'Travel Desk',color:'#276749'}])}
+    <div class="page-header">
+      <div><h2>Manager Approval Queue</h2><p>Review team requests or raise your own travel request</p></div>
+      <button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${pend.length}</h3><p>Pending Approval</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>r.status!=='PENDING_MANAGER'&&r.status!=='REJECTED'&&r.status!=='CANCELLED').length}</h3><p>Team Approved</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${myReqs.length}</h3><p>My Requests</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>r.status==='REJECTED').length}</h3><p>Rejected</p></div></div>
+    </div>
+    <div class="section-tabs">
+      <button class="sec-tab ${secTab==='pending'?'active':''}" onclick="setTab('pending')">⏳ Team Pending <span class="tab-count">${pend.length}</span></button>
+      <button class="sec-tab ${secTab==='all'?'active':''}" onclick="setTab('all')">📋 All Team (${mine.length})</button>
+      <button class="sec-tab ${secTab==='myreqs'?'active':''}" onclick="setTab('myreqs')">👤 My Requests ${myInProg>0?`<span class="tab-count">${myInProg}</span>`:''}</button>
+      <button class="sec-tab ${secTab==='policy'?'active':''}" onclick="setTab('policy')">📜 Travel Policy</button>
+      <button class="sec-tab ${secTab==='faq'?'active':''}" onclick="setTab('faq')">❓ FAQ</button>
+    </div>
+    ${secTab==='policy' ? renderTravelPolicy() : secTab==='faq' ? renderFAQ() :
+      secTab==='myreqs' ? `<div class="requests-grid">${myReqs.length===0?`<div class="empty-state"><div class="e-icon">✈️</div><p>No requests yet.<br>Click <b>"New Travel Request"</b> to get started!</p></div>`:myReqs.map(r=>reqCard(r,'manager_self')).join('')}</div>` :
+      `<div class="requests-grid">${show.length===0?`<div class="empty-state"><div class="e-icon">🎉</div><p>No pending requests!</p></div>`:show.map(r=>reqCard(r,'manager')).join('')}</div>`}`;
+}
+
+// ─── FUNCTION HEAD VIEW ───
+function renderFunctionHead(c) {
+  const mine    = requests.filter(r=>r.functionHead===currentUser.name).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const pend    = mine.filter(r=>r.status==='PENDING_FUNCTION_HEAD');
+  const myReqs  = requests.filter(r=>r.employeeId===currentUser.id).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const myInProg = myReqs.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length;
+  const show    = secTab==='all' ? mine : secTab==='myreqs' ? myReqs : (secTab==='policy'||secTab==='faq') ? [] : pend;
+  c.innerHTML = `
+    ${wfBanner(2,[{label:'Function Head',color:'#6b46c1'},{label:'Co-founder',color:'#805ad5'},{label:'Travel Desk',color:'#276749'}])}
+    <div class="page-header">
+      <div><h2>Function Head Approval</h2><p>Review team requests or raise your own travel request</p></div>
+      <button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-icon" style="background:#f0e6ff">⏳</div><div><h3>${pend.length}</h3><p>Awaiting Approval</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>['PENDING_TRAVEL_DESK','PROCESSED'].includes(r.status)).length}</h3><p>Team Approved</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${myReqs.length}</h3><p>My Requests</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>r.status==='REJECTED').length}</h3><p>Rejected</p></div></div>
+    </div>
+    <div class="section-tabs">
+      <button class="sec-tab ${secTab==='pending'?'active':''}" onclick="setTab('pending')">⏳ Team Pending <span class="tab-count">${pend.length}</span></button>
+      <button class="sec-tab ${secTab==='all'?'active':''}" onclick="setTab('all')">📋 All Team (${mine.length})</button>
+      <button class="sec-tab ${secTab==='myreqs'?'active':''}" onclick="setTab('myreqs')">👤 My Requests ${myInProg>0?`<span class="tab-count">${myInProg}</span>`:''}</button>
+      <button class="sec-tab ${secTab==='policy'?'active':''}" onclick="setTab('policy')">📜 Travel Policy</button>
+      <button class="sec-tab ${secTab==='faq'?'active':''}" onclick="setTab('faq')">❓ FAQ</button>
+    </div>
+    ${secTab==='policy' ? renderTravelPolicy() : secTab==='faq' ? renderFAQ() :
+      secTab==='myreqs' ? `<div class="requests-grid">${myReqs.length===0?`<div class="empty-state"><div class="e-icon">✈️</div><p>No requests yet.<br>Click <b>"New Travel Request"</b> to get started!</p></div>`:myReqs.map(r=>reqCard(r,'fh_self')).join('')}</div>` :
+      `<div class="requests-grid">${show.length===0?`<div class="empty-state"><div class="e-icon">🎉</div><p>No pending approvals!</p></div>`:show.map(r=>reqCard(r,'function_head')).join('')}</div>`}`;
+}
+
+// ─── TRAVEL DESK VIEW ───
+function renderTravelDesk(c) {
+  const pend  = requests.filter(r=>r.status==='PENDING_TRAVEL_DESK');
+  const proc  = requests.filter(r=>r.status==='PROCESSED');
+  const inApp = requests.filter(r=>['PENDING_MANAGER','PENDING_FUNCTION_HEAD'].includes(r.status)).length;
+  const allR  = [...requests].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const show  = secTab==='processed'?proc : secTab==='analytics'?null : secTab==='calendar'?null : secTab==='policy'?null : secTab==='faq'?null : secTab==='all'?allR : pend;
+
+  c.innerHTML = `
+    ${wfBanner(4)}
+    <div class="page-header">
+      <div><h2>Travel Desk — Booking Queue</h2><p>Process approved requests and manage all bookings</p></div>
+      <div class="header-actions">
+        <button class="btn-export" onclick="exportCSV()">📤 Export CSV</button>
+      </div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-icon" style="background:#f0e6ff">🎫</div><div><h3>${pend.length}</h3><p>Pending Booking</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${proc.length}</h3><p>Processed</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${inApp}</h3><p>In Approval</p></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${requests.length}</h3><p>Total</p></div></div>
+    </div>
+    <div class="section-tabs">
+      <button class="sec-tab ${secTab==='pending'?'active':''}" onclick="setTab('pending')">🎫 Pending <span class="tab-count">${pend.length}</span></button>
+      <button class="sec-tab ${secTab==='processed'?'active':''}" onclick="setTab('processed')">✅ Processed (${proc.length})</button>
+      <button class="sec-tab ${secTab==='all'?'active':''}" onclick="setTab('all')">📋 All (${requests.length})</button>
+      <button class="sec-tab ${secTab==='calendar'?'active':''}" onclick="setTab('calendar')">📅 Calendar</button>
+      <button class="sec-tab ${secTab==='analytics'?'active':''}" onclick="setTab('analytics')">📊 Analytics</button>
+      <button class="sec-tab ${secTab==='policy'?'active':''}" onclick="setTab('policy')">📜 Travel Policy</button>
+      <button class="sec-tab ${secTab==='faq'?'active':''}" onclick="setTab('faq')">❓ FAQ</button>
+    </div>
+    <div id="tdContent">
+      ${secTab==='analytics' ? renderAnalytics() : secTab==='calendar' ? renderCalendar() : secTab==='policy' ? renderTravelPolicy() : secTab==='faq' ? renderFAQ() :
+        show.length===0 ? `<div class="empty-state"><div class="e-icon">🎉</div><p>No requests here.</p></div>` :
+        `<div class="requests-grid">${show.map(r=>reqCard(r,'travel_desk')).join('')}</div>`}
+    </div>`;
+
+  if (secTab==='analytics') setTimeout(drawCharts, 100);
+}
+
+// ═══ REQUEST CARD ═══
+function reqCard(r, vr) {
+  const border = {PENDING_MANAGER:'#f6ad55',PENDING_FUNCTION_HEAD:'#63b3ed',PENDING_TRAVEL_DESK:'#b794f4',PROCESSED:'#68d391',REJECTED:'#fc8181',CANCELLED:'#cbd5e0'}[r.status]||'#e2e8f0';
+  const actions = cardActions(r,vr);
+  const canSelfEdit =
+    (vr==='employee'     && r.status==='PENDING_MANAGER') ||
+    (vr==='manager_self' && r.status==='PENDING_FUNCTION_HEAD') ||
+    (vr==='fh_self'      && r.status==='PENDING_TRAVEL_DESK');
+  const empActions = canSelfEdit ? `
+    <div class="emp-actions" onclick="event.stopPropagation()">
+      <button class="btn-edit" onclick="openEditReq('${r.id}')">✏️ Edit</button>
+      <button class="btn-cancel" onclick="cancelRequest('${r.id}')">✕ Cancel</button>
+    </div>` : '';
+
+  return `
+  <div class="request-card" style="border-left-color:${border}" onclick="openDetail('${r.id}')">
+    <div class="card-top">
+      <div>
+        <div class="req-id">
+          ${r.id} &nbsp;•&nbsp; ${fmtDate(r.createdAt)}
+          ${priorityBadge(r.priority||'Normal')}
+        </div>
+        <div class="req-title">${r.purpose}</div>
+        <div class="req-meta">
+          <span>👤 ${r.employeeName} (${r.dept})</span>
+          <span>🗓️ ${fmtDate(r.travelDate)}${r.returnDate?' → '+fmtDate(r.returnDate):''}</span>
+          <span>📍 ${r.fromCity} → ${r.toCity}</span>
+          <span>🎫 ${r.types.join(' + ')}</span>
+          <span>👥 ${r.travelers}</span>
+        </div>
+      </div>
+      <div class="req-actions" onclick="event.stopPropagation()">
+        ${statusBadge(r.status)}
+        ${actions}
+      </div>
+    </div>
+    <div class="card-bottom">
+      ${stepper(r.status)}
+      ${empActions}
+    </div>
+  </div>`;
+}
+
+function cardActions(r,vr) {
+  if (vr==='manager' && r.status==='PENDING_MANAGER')
+    return `<button class="btn-approve" onclick="openApproveModal('${r.id}','manager')">✓ Approve</button><button class="btn-reject" onclick="openRejectModal('${r.id}','manager')">✕ Reject</button>`;
+  if (vr==='function_head' && r.status==='PENDING_FUNCTION_HEAD')
+    return `<button class="btn-approve" onclick="openApproveModal('${r.id}','function_head')">✓ Approve</button><button class="btn-reject" onclick="openRejectModal('${r.id}','function_head')">✕ Reject</button>`;
+  if (vr==='travel_desk' && r.status==='PENDING_TRAVEL_DESK')
+    return `<button class="btn-process" onclick="openProcessModal('${r.id}')">🎫 Book Now</button>`;
+  return '';
+}
+
+// ─── STEPPER ───
+function stepper(status) {
+  const steps = ['Submit','Manager','Func. Head','Travel Desk'];
+  const doneIdx = {PENDING_MANAGER:0,PENDING_FUNCTION_HEAD:1,PENDING_TRAVEL_DESK:2,PROCESSED:3,REJECTED:-1,CANCELLED:-1}[status]??0;
+  const isRejected = ['REJECTED','CANCELLED'].includes(status);
+  const dots = steps.map((s,i) => {
+    let cls = i<=doneIdx?'done':(i===doneIdx+1&&!isRejected?'active':'todo');
+    if (isRejected) cls = i===0?'done':'todo';
+    const icon = cls==='done'?'✓':(cls==='active'?'…':(i+1));
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <div class="step-dot ${cls}">${icon}</div>
+      <div class="step-label" style="color:${cls==='done'?'#48bb78':cls==='active'?'#f6ad55':'#a0aec0'}">${s}</div>
+    </div>${i<steps.length-1?`<div class="step-line ${i<doneIdx?'done':'todo'}" style="margin-bottom:14px;"></div>`:''}`;
+  }).join('');
+  return `<div class="stepper-row">${dots}</div>`;
+}
+
+// ─── STATUS & PRIORITY BADGES ───
+function statusBadge(s) {
+  const m={PENDING_MANAGER:['🔶','Pending Manager','badge-pending-manager'],PENDING_FUNCTION_HEAD:['🔷','Pending FH','badge-pending-fh'],PENDING_TRAVEL_DESK:['🟣','Pending Booking','badge-pending-td'],PROCESSED:['✅','Processed','badge-processed'],REJECTED:['❌','Rejected','badge-rejected'],CANCELLED:['⭕','Cancelled','badge-cancelled']};
+  const[ic,lb,cls]=m[s]||['⚪',s,''];
+  return `<span class="badge ${cls}">${ic} ${lb}</span>`;
+}
+function priorityBadge(p) {
+  const m={Normal:['📋','p-normal'],Urgent:['⚡','p-urgent'],Emergency:['🚨','p-emergency']};
+  const[ic,cls]=m[p]||['📋','p-normal'];
+  return p==='Normal'?'':`<span class="p-badge ${cls}">${ic} ${p}</span>`;
+}
+
+function fmtDate(d) { if(!d)return'—'; try{return new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}catch{return d} }
+function setTab(t) { secTab=t; render(); }
+
+// ═══ PRIORITY SELECTOR ═══
+function selectPriority(p) {
+  document.getElementById('f_priority').value = p;
+  ['Normal','Urgent','Emergency'].forEach(x=>{
+    const el = document.getElementById(`popt_${x}`);
+    el.className = 'priority-opt' + (x===p?` sel-${x.toLowerCase()}`:'');
+  });
+}
+
+// ═══ NEW REQUEST ═══
+function openNewReq() {
+  if (currentUser.role==='travel_desk') { showToast('Travel Desk cannot submit travel requests.','error'); return; }
+  selTypes=[];
+  document.getElementById('formTitle').textContent  = '✈️ New Travel Request';
+  document.getElementById('formSubmitBtn').textContent = '🚀 Submit Request';
+  document.getElementById('f_editId').value = '';
+  document.getElementById('f_name').value   = currentUser.name;
+  document.getElementById('f_dept').value   = currentUser.dept;
+  document.getElementById('f_manager').value  = currentUser.manager||'';
+  document.getElementById('f_fhead').value    = currentUser.functionHead||'';
+  ['f_purpose','f_from','f_to','f_notes','f_travelDate','f_returnDate'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const frt=document.getElementById('f_returnTime'); if(frt) frt.selectedIndex=0;
+  const frtc=document.getElementById('f_returnCustomTime'); if(frtc){frtc.style.display='none';frtc.value='';}
+  document.getElementById('f_travelers').value = '1';
+  selectPriority('Normal');
+  ['flight','train','bus','hotel'].forEach(t=>{ document.getElementById(`type_${t}`).classList.remove('selected'); document.getElementById(`sec_${t}`).classList.remove('visible'); });
+  updateFormSections();
+  document.getElementById('newReqOverlay').classList.add('open');
+}
+
+function openEditReq(reqId) {
+  const r = requests.find(x=>x.id===reqId);
+  if (!r) return;
+  const canEdit =
+    (currentUser.role==='employee'      && r.status==='PENDING_MANAGER') ||
+    (currentUser.role==='manager'       && r.employeeId===currentUser.id && r.status==='PENDING_FUNCTION_HEAD') ||
+    (currentUser.role==='function_head' && r.employeeId===currentUser.id && r.status==='PENDING_TRAVEL_DESK');
+  if (!canEdit) {
+    alert('🔒 This request cannot be edited at this stage.');
+    return;
+  }
+  selTypes = r.types.map(t=>t.toLowerCase());
+  document.getElementById('formTitle').textContent   = '✏️ Edit Travel Request';
+  document.getElementById('formSubmitBtn').textContent = '💾 Update Request';
+  document.getElementById('f_editId').value   = reqId;
+  document.getElementById('f_name').value     = r.employeeName;
+  document.getElementById('f_dept').value     = r.dept;
+  document.getElementById('f_manager').value  = r.manager||'';
+  document.getElementById('f_fhead').value    = r.functionHead||'';
+  document.getElementById('f_purpose').value  = r.purpose;
+  document.getElementById('f_from').value     = r.fromCity;
+  document.getElementById('f_to').value       = r.toCity;
+  document.getElementById('f_travelers').value = r.travelers;
+  document.getElementById('f_travelDate').value = r.travelDate||'';
+  document.getElementById('f_returnDate').value = r.returnDate||'';
+  document.getElementById('f_notes').value    = r.notes||'';
+  selectPriority(r.priority||'Normal');
+  ['flight','train','bus','hotel'].forEach(t=>{
+    const btn = document.getElementById(`type_${t}`);
+    const sec = document.getElementById(`sec_${t}`);
+    if (selTypes.includes(t)) { btn.classList.add('selected'); sec.classList.add('visible'); }
+    else { btn.classList.remove('selected'); sec.classList.remove('visible'); }
+  });
+  // Load return time if saved
+  if (r.returnTime) {
+    const sel = document.getElementById('f_returnTime');
+    if (sel) {
+      const match = Array.from(sel.options).find(o => o.value === r.returnTime || o.text === r.returnTime);
+      if (match) sel.value = match.value;
+      else { sel.value='custom'; const c=document.getElementById('f_returnCustomTime'); if(c){c.style.display='block';c.value=r.returnTime;} }
+    }
+  }
+  updateFormSections();
+  document.getElementById('newReqOverlay').classList.add('open');
+}
+
+function closeNewReq() { document.getElementById('newReqOverlay').classList.remove('open'); }
+function handleNewOverlayClick(e) { if(e.target.id==='newReqOverlay') closeNewReq(); }
+
+function toggleType(t) {
+  const btn = document.getElementById(`type_${t}`);
+  const sec = document.getElementById(`sec_${t}`);
+  const travelModes = ['flight', 'train', 'bus'];
+
+  if (t !== 'hotel') {
+    // Deselect all other travel modes first (Flight/Train/Bus are mutually exclusive)
+    travelModes.filter(m => m !== t).forEach(m => {
+      selTypes = selTypes.filter(x => x !== m);
+      document.getElementById(`type_${m}`).classList.remove('selected');
+      document.getElementById(`sec_${m}`).classList.remove('visible');
+    });
+    // Toggle the clicked travel mode
+    if (selTypes.includes(t)) {
+      selTypes = selTypes.filter(x => x !== t);
+      btn.classList.remove('selected');
+      sec.classList.remove('visible');
+    } else {
+      selTypes.push(t);
+      btn.classList.add('selected');
+      sec.classList.add('visible');
+    }
+  } else {
+    // Hotel is independent — can be combined with any travel mode
+    if (selTypes.includes(t)) {
+      selTypes = selTypes.filter(x => x !== t);
+      btn.classList.remove('selected');
+      sec.classList.remove('visible');
+    } else {
+      selTypes.push(t);
+      btn.classList.add('selected');
+      sec.classList.add('visible');
+    }
+  }
+  updateFormSections();
+}
+
+// ── Smart show/hide form sections based on selection ──
+function updateFormSections() {
+  const hasTransport = selTypes.some(t => ['flight','train','bus'].includes(t));
+  const hotelOnly    = selTypes.length > 0 && !hasTransport && selTypes.includes('hotel');
+
+  // Travel Route section: hide when ONLY hotel is selected
+  const routeSec = document.getElementById('sec_travelRoute');
+  if (routeSec) routeSec.style.display = hotelOnly ? 'none' : '';
+
+  // When hotel-only: remove required from route fields so form can submit
+  // When transport: restore required on route fields
+  ['f_from','f_to','f_travelDate'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (hotelOnly) el.removeAttribute('required');
+    else           el.setAttribute('required','');
+  });
+
+  // Return Time row: show only when a transport mode is selected
+  const retRow = document.getElementById('returnTimeRow');
+  if (retRow) retRow.style.display = hasTransport ? '' : 'none';
+
+  // Hotel section: auto-hide if transport is selected WITHOUT hotel
+  if (hasTransport && !selTypes.includes('hotel')) {
+    const hotelSec = document.getElementById('sec_hotel');
+    const hotelBtn = document.getElementById('type_hotel');
+    if (hotelSec) hotelSec.classList.remove('visible');
+    if (hotelBtn) hotelBtn.classList.remove('selected');
+    selTypes = selTypes.filter(x => x !== 'hotel');
+  }
+}
+
+function submitRequest(e) {
+  e.preventDefault();
+  if (selTypes.length===0) { showToast('Please select at least one travel type (Flight / Train / Bus / Hotel).','error'); return; }
+
+  // Date order validation
+  const tDate = v('f_travelDate'), rDate = v('f_returnDate');
+  if (tDate && rDate && rDate < tDate) {
+    showToast('❌ Return date cannot be before Travel date!', 'error');
+    document.getElementById('f_returnDate').value = '';
+    return;
+  }
+  const cIn = v('f_hCheckin'), cOut = v('f_hCheckout');
+  if (cIn && cOut && cOut < cIn) {
+    showToast('❌ Check-out date cannot be before Check-in date!', 'error');
+    document.getElementById('f_hCheckout').value = '';
+    return;
+  }
+  const editId = document.getElementById('f_editId').value;
+
+  if (editId) {
+    // UPDATE existing
+    const req = requests.find(r=>r.id===editId);
+    if (!req) return;
+    const canUpdate =
+      (currentUser.role==='employee'      && req.status==='PENDING_MANAGER') ||
+      (currentUser.role==='manager'       && req.employeeId===currentUser.id && req.status==='PENDING_FUNCTION_HEAD') ||
+      (currentUser.role==='function_head' && req.employeeId===currentUser.id && req.status==='PENDING_TRAVEL_DESK');
+    if (!canUpdate) {
+      showToast('🔒 Request cannot be modified at this stage.','error');
+      closeNewReq(); return;
+    }
+    req.purpose    = v('f_purpose');
+    req.travelers  = v('f_travelers');
+    req.fromCity   = v('f_from');
+    req.toCity     = v('f_to');
+    req.travelDate  = v('f_travelDate');
+    req.returnDate  = v('f_returnDate');
+    req.returnTime  = selTypes.some(t=>['flight','train','bus'].includes(t)) ? getTimeValue('f_returnTime','f_returnCustomTime') : '';
+    req.notes       = v('f_notes');
+    req.priority    = v('f_priority');
+    req.types       = selTypes.map(t=>t[0].toUpperCase()+t.slice(1));
+    if (selTypes.includes('flight')) req.flight = { time:getTimeValue('f_fTime','f_fCustomTime') };
+    else delete req.flight;
+    if (selTypes.includes('train'))  req.train  = { time:getTimeValue('f_tTime','f_tCustomTime'), class:v('f_tClass') };
+    else delete req.train;
+    if (selTypes.includes('bus'))    req.bus    = { time:getTimeValue('f_bTime','f_bCustomTime'), type:v('f_bType') };
+    else delete req.bus;
+    if (selTypes.includes('hotel'))  req.hotel  = { city:v('f_hCity'), roomType:v('f_hRoom'), checkin:v('f_hCheckin'), checkout:v('f_hCheckout'), pref:v('f_hPref') };
+    else delete req.hotel;
+    req.history.push({ action:'EDITED BY EMPLOYEE', by:currentUser.name, role:'Employee', date:today(), comment:'Request details updated.' });
+    save(); closeNewReq(); render();
+    return;
+  }
+
+  const id = 'REQ-' + String(requests.length + 101).padStart(3,'0');
+
+  // Smart status & role based on who is submitting
+  let initStatus, initManagerName, initFHeadName, submitterRoleLabel;
+  if (currentUser.role === 'manager') {
+    initStatus       = 'PENDING_FUNCTION_HEAD';   // skip manager step — they are the manager
+    initManagerName  = currentUser.name;           // self
+    initFHeadName    = currentUser.functionHead || USERS.find(u=>u.role==='function_head')?.name || '';
+    submitterRoleLabel = 'Manager';
+  } else if (currentUser.role === 'function_head') {
+    initStatus       = 'PENDING_TRAVEL_DESK';      // skip both — goes straight to travel desk
+    initManagerName  = '';
+    initFHeadName    = currentUser.name;            // self
+    submitterRoleLabel = 'Function Head';
+  } else {
+    initStatus       = 'PENDING_MANAGER';
+    initManagerName  = currentUser.manager || '';
+    initFHeadName    = currentUser.functionHead || '';
+    submitterRoleLabel = 'Employee';
+  }
+
+  const req = {
+    id, employeeId:currentUser.id, employeeName:currentUser.name, dept:currentUser.dept,
+    manager:initManagerName, functionHead:initFHeadName,
+    types:selTypes.map(t=>t[0].toUpperCase()+t.slice(1)),
+    purpose:v('f_purpose'), travelers:v('f_travelers'),
+    fromCity: v('f_from') || v('f_hCity') || '—',
+    toCity:   v('f_to')   || v('f_hCity') || '—',
+    travelDate:v('f_travelDate') || v('f_hCheckin') || '',
+    returnDate:v('f_returnDate') || v('f_hCheckout') || '',
+    returnTime: selTypes.some(t=>['flight','train','bus'].includes(t)) ? getTimeValue('f_returnTime','f_returnCustomTime') : '',
+    notes:v('f_notes'),
+    priority:v('f_priority'), status:initStatus, comments:[],
+    history:[{action:'SUBMITTED',by:currentUser.name,role:submitterRoleLabel,date:today(),comment:''}],
+    createdAt:new Date().toISOString(),
+  };
+  if (selTypes.includes('flight')) req.flight = { time:getTimeValue('f_fTime','f_fCustomTime') };
+  if (selTypes.includes('train'))  req.train  = { time:getTimeValue('f_tTime','f_tCustomTime'), class:v('f_tClass') };
+  if (selTypes.includes('bus'))    req.bus    = { time:getTimeValue('f_bTime','f_bCustomTime'), type:v('f_bType') };
+  if (selTypes.includes('hotel'))  req.hotel  = { city:v('f_hCity'), roomType:v('f_hRoom'), checkin:v('f_hCheckin'), checkout:v('f_hCheckout'), pref:v('f_hPref') };
+  requests.push(req);
+  save(); closeNewReq(); render();
+  showToast(`✅ ${id} submitted! Sent to ${req.manager || 'Function Head'} for approval.`, 'success');
+}
+
+function cancelRequest(reqId) {
+  const req = requests.find(r=>r.id===reqId);
+  if (!req) return;
+  const canCancel =
+    (currentUser.role==='employee'      && req.status==='PENDING_MANAGER') ||
+    (currentUser.role==='manager'       && req.employeeId===currentUser.id && req.status==='PENDING_FUNCTION_HEAD') ||
+    (currentUser.role==='function_head' && req.employeeId===currentUser.id && req.status==='PENDING_TRAVEL_DESK');
+  if (!canCancel) {
+    alert('🔒 This request cannot be cancelled at this stage.');
+    return;
+  }
+  if (!confirm('Cancel this travel request?')) return;
+  req.status = 'CANCELLED';
+  req.history.push({action:'CANCELLED BY EMPLOYEE',by:currentUser.name,role:'Employee',date:today(),comment:'Request cancelled by employee.'});
+  save(); render();
+}
+
+function v(id) { return document.getElementById(id)?.value||''; }
+function today() { return new Date().toISOString().split('T')[0]; }
+
+function toggleCustomTime(selId, inpId) {
+  const sel=document.getElementById(selId), inp=document.getElementById(inpId);
+  if(sel.value==='custom'){inp.style.display='block';inp.required=true;inp.focus();}
+  else{inp.style.display='none';inp.required=false;inp.value='';}
+}
+function getTimeValue(selId, customId) {
+  const sel=document.getElementById(selId);
+  if(sel.value==='custom'){const t=document.getElementById(customId).value; return t||'Custom Time';}
+  return sel.value;
+}
+
+// ═══ APPROVE ═══
+function openApproveModal(reqId,role){pendingAct={type:'approve',reqId,role};document.getElementById('approveComment').value='';document.getElementById('approveModal').classList.add('open');}
+function closeApproveModal(){document.getElementById('approveModal').classList.remove('open');pendingAct=null;}
+function confirmApprove(){
+  const {reqId,role}=pendingAct, comment=document.getElementById('approveComment').value.trim();
+  const req=requests.find(r=>r.id===reqId); if(!req)return;
+  if(role==='manager'){
+    req.status='PENDING_FUNCTION_HEAD';
+    req.history.push({action:'APPROVED BY MANAGER',by:currentUser.name,role:'Manager',date:today(),comment});
+    save();closeApproveModal();render();
+  } else {
+    req.status='PENDING_TRAVEL_DESK';
+    req.history.push({action:'APPROVED BY FUNCTION HEAD',by:currentUser.name,role:'Function Head',date:today(),comment});
+    const snapReq = JSON.parse(JSON.stringify(req)); // snapshot before render
+    save();closeApproveModal();render();
+    showMyBizEmail(snapReq); // trigger email modal
+  }
+}
+
+// ═══ MYBIZ EMAIL MODAL ═══
+function showMyBizEmail(req){
+  const emp = USERS.find(u=>u.id===req.employeeId);
+  const empEmail = emp ? emp.email : (req.employeeName.split(' ')[0].toLowerCase()+'@wiom.in');
+  const fmtDate = d => { if(!d) return '—'; const dt=new Date(d); return isNaN(dt)?d:dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); };
+  const modes = req.types ? req.types.join(' + ') : '—';
+  const now = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+
+  document.getElementById('mybizEmailContent').innerHTML = `
+    <div class="mybiz-sent-banner">
+      <span style="font-size:18px;">✅</span>
+      <div>
+        <div>Email sent to <strong>${empEmail}</strong></div>
+        <div style="font-size:11px;font-weight:400;color:#38a169;">Delivered at ${now} — Employee can now self-book on MyBiz</div>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:#718096;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+      <span>📨 To:</span>
+      <span class="mybiz-to-chip">✉️ ${empEmail}</span>
+      <span style="color:#a0aec0;">• Subject: <em>Travel Request Approved — Book via MyBiz | ${req.id}</em></span>
+    </div>
+
+    <div class="mybiz-email-preview">
+      <div class="mybiz-email-head">
+        <div style="font-size:32px;">✈️</div>
+        <h2>Your Travel Request is Approved!</h2>
+        <p>Please complete your self-booking via MyBiz at the earliest</p>
+      </div>
+      <div class="mybiz-email-body">
+        <p style="font-size:13px;color:#2d3748;margin-bottom:4px;">Hi <strong>${req.employeeName}</strong>,</p>
+        <p style="font-size:12px;color:#718096;margin-bottom:14px;line-height:1.6;">
+          Your travel request <strong style="color:#E81B8C;">${req.id}</strong> has been fully approved.
+          Please log in to <strong>MyBiz</strong> and complete your self-booking as per company policy.
+        </p>
+        <table class="mybiz-meta-table">
+          <tr><td>📋 Request ID</td><td>${req.id}</td></tr>
+          <tr><td>🎯 Purpose</td><td>${req.purpose||'—'}</td></tr>
+          <tr><td>📍 Route</td><td>${req.fromCity||'—'} → ${req.toCity||'—'}</td></tr>
+          <tr><td>✈️ Travel Mode</td><td>${modes}</td></tr>
+          <tr><td>📅 Travel Date</td><td>${fmtDate(req.travelDate)}</td></tr>
+          <tr><td>🔙 Return Date</td><td>${fmtDate(req.returnDate)}</td></tr>
+          <tr><td>⚡ Priority</td><td>${req.priority||'Normal'}</td></tr>
+          <tr><td>✅ Approved By</td><td>Function Head</td></tr>
+        </table>
+        <div class="mybiz-note">
+          ⚠️ <strong>Important:</strong> Book only as per your <strong>travel policy entitlements</strong>.
+          Tickets must be booked within <strong>24 hours</strong> of receiving this email.
+          Post-booking confirmation will be shared with the Travel Desk automatically.
+        </div>
+        <a class="btn-mybiz-book" href="https://mybiz.makemytrip.com" target="_blank">🎫 Book on MyBiz Now →</a>
+        <p class="mybiz-footer-note">Wiom Nomad &nbsp;•&nbsp; Omnia Information Pvt. Ltd. &nbsp;•&nbsp; This is an automated notification</p>
+      </div>
+    </div>`;
+
+  document.getElementById('mybizEmailOverlay').classList.add('open');
+}
+function closeMyBizModal(){ document.getElementById('mybizEmailOverlay').classList.remove('open'); }
+function handleMybizOverlayClick(e){ if(e.target.id==='mybizEmailOverlay') closeMyBizModal(); }
+
+// ═══ REJECT ═══
+function openRejectModal(reqId,role){pendingAct={type:'reject',reqId,role};document.getElementById('rejectReason').value='';document.getElementById('rejectModal').classList.add('open');}
+function closeRejectModal(){document.getElementById('rejectModal').classList.remove('open');pendingAct=null;}
+function confirmReject(){
+  const reason=document.getElementById('rejectReason').value.trim();
+  if(!reason){alert('Please provide a reason.');return;}
+  const{reqId,role}=pendingAct, req=requests.find(r=>r.id===reqId); if(!req)return;
+  const lbl=role==='manager'?'MANAGER':'FUNCTION HEAD';
+  req.status='REJECTED';
+  req.history.push({action:`REJECTED BY ${lbl}`,by:currentUser.name,role:role==='manager'?'Manager':'Function Head',date:today(),comment:reason});
+  save();closeRejectModal();render();
+}
+
+// ═══ PROCESS ═══
+function openProcessModal(reqId){pendingAct={type:'process',reqId};document.getElementById('bookingRef').value='';document.getElementById('processNotes').value='';document.getElementById('processModal').classList.add('open');}
+function closeProcessModal(){document.getElementById('processModal').classList.remove('open');pendingAct=null;}
+function confirmProcess(){
+  const ref=document.getElementById('bookingRef').value.trim(), notes=document.getElementById('processNotes').value.trim();
+  const req=requests.find(r=>r.id===pendingAct.reqId); if(!req)return;
+  req.status='PROCESSED'; req.bookingRef=ref||'N/A'; req.bookingNotes=notes;
+  req.history.push({action:'PROCESSED BY TRAVEL DESK',by:currentUser.name,role:'Travel Desk',date:today(),comment:`Ref: ${req.bookingRef}. ${notes}`});
+  save();closeProcessModal();render();
+}
+
+// ═══ DETAIL PANEL ═══
+function openDetail(reqId) {
+  const r=requests.find(x=>x.id===reqId); if(!r)return;
+  detailReqId=reqId;
+  const p=document.getElementById('detailPanel');
+  p.innerHTML=`
+    <div class="modal-header">
+      <div><h3>📋 ${r.id} ${priorityBadge(r.priority||'Normal')}</h3><div style="margin-top:6px">${statusBadge(r.status)}</div></div>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div style="margin-bottom:16px">${stepper(r.status)}</div>
+
+    ${r.status !== 'PENDING_MANAGER' && !['REJECTED','CANCELLED'].includes(r.status) ? `
+    <div style="background:#fff8e1;border:1px solid #f6c90e;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:18px;">🔒</span>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#7c5c00;">Request Locked — No Changes Allowed</div>
+        <div style="font-size:12px;color:#a07800;margin-top:2px;">This request has been approved and is now in the approval workflow. Editing and cancellation are disabled.</div>
+      </div>
+    </div>` : ''}
+
+    <div class="detail-section">
+      <div class="detail-sec-title">👤 Traveler Information</div>
+      <div class="detail-grid">
+        <div class="detail-item"><label>Employee</label><p>${r.employeeName}</p></div>
+        <div class="detail-item"><label>Department</label><p>${r.dept}</p></div>
+        <div class="detail-item"><label>Manager</label><p>${r.manager}</p></div>
+        <div class="detail-item"><label>Function Head</label><p>${r.functionHead}</p></div>
+        <div class="detail-item"><label>Purpose</label><p>${r.purpose}</p></div>
+        <div class="detail-item"><label>Travelers</label><p>${r.travelers}</p></div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-sec-title">🗺️ Travel Details</div>
+      <div class="detail-grid">
+        <div class="detail-item"><label>From</label><p>${r.fromCity}</p></div>
+        <div class="detail-item"><label>To</label><p>${r.toCity}</p></div>
+        <div class="detail-item"><label>Travel Date</label><p>${fmtDate(r.travelDate)}</p></div>
+        <div class="detail-item"><label>Return Date</label><p>${fmtDate(r.returnDate)}${r.returnTime?` • ${r.returnTime}`:''}</p></div>
+        <div class="detail-item"><label>Types</label><p>${r.types.join(', ')}</p></div>
+        <div class="detail-item"><label>Priority</label><p>${r.priority||'Normal'}</p></div>
+      </div>
+      ${travelDetails(r)}
+    </div>
+
+    ${r.notes?`<div class="detail-section"><div class="detail-sec-title">📝 Notes</div><p style="font-size:13px;color:#4a5568;background:#f7fafc;padding:12px;border-radius:8px;">${r.notes}</p></div>`:''}
+
+    ${r.bookingRef?`<div class="detail-section"><div class="detail-sec-title">🎫 Booking Confirmation</div>
+      <div class="booking-box"><div style="font-size:11px;color:#276749;font-weight:700;margin-bottom:4px;">BOOKING REF / PNR</div>
+      <div class="booking-ref">${r.bookingRef}</div>
+      ${r.bookingNotes?`<p style="font-size:13px;color:#4a5568;margin-top:8px;">${r.bookingNotes}</p>`:''}</div></div>`:''}
+
+    <div class="detail-section">
+      <div class="detail-sec-title">📜 Approval Timeline</div>
+      <div class="timeline">${r.history.map(h=>`
+        <div class="timeline-item">
+          <div class="t-dot" style="background:${histColor(h.action)}"></div>
+          <div class="t-action">${h.action}</div>
+          <div class="t-by">By: ${h.by} (${h.role}) &nbsp;•&nbsp; ${h.date}</div>
+          ${h.comment?`<div class="t-comment">"${h.comment}"</div>`:''}
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-sec-title">💬 Comments (${(r.comments||[]).length})</div>
+      <div id="commentsList">
+        ${(r.comments||[]).length===0?`<p style="font-size:13px;color:#a0aec0;text-align:center;padding:12px;">No comments yet.</p>`:
+          (r.comments||[]).map(c=>`
+          <div class="comment-item ${c.by===currentUser.name?'own':''}">
+            <div class="comment-meta"><strong>${c.by}</strong><span>${c.role}</span><span>•</span><span>${c.date}</span></div>
+            <div class="comment-text">${c.text}</div>
+          </div>`).join('')}
+      </div>
+      <div class="comment-input-row">
+        <input type="text" id="commentInput" placeholder="Write a comment..." onkeydown="if(event.key==='Enter')addComment('${r.id}')"/>
+        <button class="btn-comment" onclick="addComment('${r.id}')">Send</button>
+      </div>
+    </div>
+
+    ${detailActions(r)?`<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:16px;border-top:1px solid #e2e8f0;">${detailActions(r)}</div>`:''}
+  `;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+function addComment(reqId) {
+  const input = document.getElementById('commentInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const req = requests.find(r=>r.id===reqId);
+  if (!req) return;
+  if (!req.comments) req.comments = [];
+  req.comments.push({ id:'c'+Date.now(), by:currentUser.name, role:ROLE_LABELS[currentUser.role].replace(/[^\w\s]/g,'').trim(), text, date:today() });
+  save();
+  input.value='';
+  // Re-render comments only
+  const list = document.getElementById('commentsList');
+  if (list) list.innerHTML = req.comments.map(c=>`
+    <div class="comment-item ${c.by===currentUser.name?'own':''}">
+      <div class="comment-meta"><strong>${c.by}</strong><span>${c.role}</span><span>•</span><span>${c.date}</span></div>
+      <div class="comment-text">${c.text}</div>
+    </div>`).join('');
+}
+
+function travelDetails(r) {
+  let h='';
+  if(r.flight) h+=`<div style="background:#f7fafc;border-radius:8px;padding:12px;margin-top:10px;border:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:800;color:#3182ce;margin-bottom:8px;">✈️ FLIGHT</div><div class="detail-grid"><div class="detail-item"><label>Preferred Time</label><p>${r.flight.time}</p></div></div></div>`;
+  if(r.train) h+=`<div style="background:#f7fafc;border-radius:8px;padding:12px;margin-top:10px;border:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:800;color:#d97706;margin-bottom:8px;">🚂 TRAIN</div><div class="detail-grid"><div class="detail-item"><label>Preferred Time</label><p>${r.train.time}</p></div><div class="detail-item"><label>Class</label><p>${r.train.class}</p></div></div></div>`;
+  if(r.bus)   h+=`<div style="background:#f7fafc;border-radius:8px;padding:12px;margin-top:10px;border:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:800;color:#059669;margin-bottom:8px;">🚌 BUS</div><div class="detail-grid"><div class="detail-item"><label>Preferred Time</label><p>${r.bus.time}</p></div><div class="detail-item"><label>Type</label><p>${r.bus.type}</p></div></div></div>`;
+  if(r.hotel) h+=`<div style="background:#f7fafc;border-radius:8px;padding:12px;margin-top:10px;border:1px solid #e2e8f0;"><div style="font-size:11px;font-weight:800;color:#7c3aed;margin-bottom:8px;">🏨 HOTEL</div><div class="detail-grid"><div class="detail-item"><label>Location</label><p>${r.hotel.city}</p></div><div class="detail-item"><label>Room</label><p>${r.hotel.roomType}</p></div><div class="detail-item"><label>Check-in</label><p>${fmtDate(r.hotel.checkin)}</p></div><div class="detail-item"><label>Check-out</label><p>${fmtDate(r.hotel.checkout)}</p></div>${r.hotel.pref?`<div class="detail-item" style="grid-column:span 2"><label>Preferences</label><p>${r.hotel.pref}</p></div>`:''}</div></div>`;
+  return h;
+}
+
+function detailActions(r) {
+  const role=currentUser.role;
+  if(role==='manager'&&r.status==='PENDING_MANAGER') return `<button class="btn-approve" onclick="openApproveFromDetail('manager')">✓ Approve</button><button class="btn-reject" onclick="openRejectFromDetail('manager')">✕ Reject</button>`;
+  if(role==='function_head'&&r.status==='PENDING_FUNCTION_HEAD') return `<button class="btn-approve" onclick="openApproveFromDetail('function_head')">✓ Approve</button><button class="btn-reject" onclick="openRejectFromDetail('function_head')">✕ Reject</button>`;
+  if(role==='travel_desk'&&r.status==='PENDING_TRAVEL_DESK') return `<button class="btn-process" onclick="openProcessFromDetail()">🎫 Book Now</button>`;
+  return '';
+}
+function openApproveFromDetail(role){closeDetail();openApproveModal(detailReqId,role);}
+function openRejectFromDetail(role){closeDetail();openRejectModal(detailReqId,role);}
+function openProcessFromDetail(){closeDetail();openProcessModal(detailReqId);}
+function closeDetail(){document.getElementById('detailOverlay').classList.remove('open');}
+function handleDetailOverlayClick(e){if(e.target.id==='detailOverlay')closeDetail();}
+function histColor(a){if(a.includes('SUBMITTED'))return'#3182ce';if(a.includes('APPROVED'))return'#38a169';if(a.includes('REJECTED'))return'#e53e3e';if(a.includes('PROCESSED'))return'#805ad5';if(a.includes('EDITED'))return'#3182ce';return'#a0aec0';}
+
+// ═══ FAQ ═══
+const FAQ_DATA = [
+  {
+    id:'portal', icon:'🏢', title:'Wiom Nomad — How It Works', color:'#E81B8C',
+    faqs:[
+      { q:'How do I submit a travel request?', a:'Login → select your role → click "✈️ New Travel Request" → fill in traveler info, travel type (Flight/Train/Bus/Hotel), dates, route, and priority → click "Submit Request". Your Manager will be notified automatically.' },
+      { q:'What is the approval workflow?', a:'Requests go through 4 stages: <br><b>1. Employee</b> submits → <b>2. Manager</b> approves → <b>3. Function Head</b> approves → <b>4. Travel Desk</b> processes & books. You receive notifications at each stage.' },
+      { q:'How long does approval take?', a:'Manager approval: 1 business day. Function Head approval: 1 business day. Travel Desk processing: 1–2 business days after full approval. For <b>Emergency</b> priority, the process is expedited.' },
+      { q:'Can I edit my request after submission?', a:'Yes! You can edit your request only while it is in <b>Pending Manager</b> status. Once the manager approves, the request moves forward and cannot be edited. Click "✏️ Edit" on your request card.' },
+      { q:'Can I cancel a travel request?', a:'Yes. You can cancel your request while it is in <b>Pending Manager</b> status by clicking "✕ Cancel" on your request card. Once approved, contact the Travel Desk (gaurav.kumar@wiom.in) to cancel.' },
+      { q:'What do the priority levels mean?', a:'<b>📋 Normal</b> — Standard processing (default). <b>⚡ Urgent</b> — Highlighted for faster review, needed within 48 hrs. <b>🚨 Emergency</b> — Immediate attention required, animated red badge, escalated to top of queue.' },
+      { q:'What travel modes can I request?', a:'You can request one or more of: ✈️ Flight, 🚂 Train, 🚌 Bus, 🏨 Hotel. Select all that apply for your trip in the request form.' },
+      { q:'What are the hotel booking limits per city?', a:'Metro Cities (Mumbai, Delhi, Bangalore, etc.): ₹4,500/night. Non-Metro / Tier-2 / Tier-3 cities: ₹2,500/night. Exceeding the limit requires prior written approval from your Function Head.' },
+      { q:'What class am I entitled to for train/flight?', a:'✈️ Flight (>800 km): Economy Class only. 🚂 Train (≤800 km): 3AC (Three-Tier AC). 🚌 Bus: AC Sleeper or Volvo. Upgrades require Function Head approval.' },
+      { q:'How do I track my request status?', a:'Login with your credentials → your dashboard shows all requests with live status badges (Pending Manager, Pending Function Head, Pending Travel Desk, Processed, Rejected). Click any request card for full timeline details.' },
+      { q:'Who processes my booking after approval?', a:'Gaurav Kumar (gaurav.kumar@wiom.in) — Travel Desk Admin — processes all approved requests. You will receive a Booking Reference / PNR once your booking is confirmed.' },
+      { q:'What happens after the Travel Desk processes my request?', a:'Your request moves to <b>Processed</b> status. You will see the Booking Reference (PNR/Hotel Conf. No.) and booking notes on your request detail panel. Carry this reference for your travel.' },
+    ]
+  },
+  {
+    id:'access', icon:'🎯', title:'Access & Account', color:'#3182ce',
+    faqs:[
+      { q:'Who can use MyBiz?', a:'All employees of Wiom (Omnia Information Pvt. Ltd.) are eligible to access MyBiz. You just need your Wiom mail ID to get started.' },
+      { q:'How do I get access?', a:'You\'ll receive access credentials via email. Simply visit <b>mybiz.makemytrip.com</b> and create your account with your Wiom mail ID.' },
+      { q:'How long does it take to get access?', a:'Typically <b>1–2 business days</b> from when you register. You\'ll receive a confirmation email once your account is activated.' },
+      { q:'Can my family members use my account?', a:'No. Each employee gets their own individual access account for security and tracking purposes. Family members cannot share your login.' },
+      { q:'What if I forget my password?', a:'Click <b>"Forgot Password"</b> on the login page. You\'ll receive a reset link on your registered email within minutes.' },
+      { q:'Is my account secure?', a:'Yes! MyBiz uses encrypted data protection, secure login, and follows international security standards to keep your account safe.' },
+    ]
+  },
+  {
+    id:'booking', icon:'💳', title:'Booking & Pricing', color:'#805ad5',
+    faqs:[
+      { q:'How do I book a flight or hotel on MyBiz?', a:'Login to mybiz.makemytrip.com → Search for your destination → Compare prices → Select your preferred option → Make payment. Simple!' },
+      { q:'What payment methods are accepted?', a:'Credit cards, debit cards, and corporate cards are accepted. Some offers require specific card types (e.g., YES BANK RazorpayX for cashback).' },
+      { q:'How much discount will I get?', a:'You get <b>15–25% discount</b> on flights, hotels, and holiday packages compared to regular public rates. Discounts vary by destination and timing.' },
+      { q:'Can I use multiple offers together?', a:'Some offers can be combined (like cashback + discounts), but some are exclusive. Check the specific terms for each offer before booking.' },
+      { q:'Is there a booking limit per month?', a:'No! You can book as many trips as needed. There is no restriction on the number of bookings per month or year.' },
+      { q:'What if the price drops after I book?', a:'MyBiz offers a <b>price match guarantee</b>. If the price drops within 24 hours of booking, you can request a refund of the difference.' },
+      { q:'Are there any hidden charges?', a:'No hidden charges at all. All fees are transparently shown before you confirm your booking. What you see is what you pay!' },
+    ]
+  },
+  {
+    id:'cancel', icon:'❌', title:'Cancellation & Refunds', color:'#e53e3e',
+    faqs:[
+      { q:'Can I cancel my MyBiz booking?', a:'Yes! You can cancel anytime with <b>ZERO penalties</b>. MyBiz offers FREE cancellation on all bookings.' },
+      { q:'How much refund will I get?', a:'You get a <b>100% full refund</b> of your booking amount. No deductions, no processing fees.' },
+      { q:'How long does a refund take?', a:'Refunds are processed within <b>3–5 business days</b>. The amount is credited back to your payment method or MyBiz wallet.' },
+      { q:'Can I cancel up to the travel date?', a:'Yes! You can cancel even <b>24 hours before</b> your travel date and still get a full refund.' },
+      { q:'What if the airline cancels my flight?', a:'If the airline cancels, you get a <b>full refund automatically</b>. MyBiz customer support will also help you rebook at no extra cost.' },
+      { q:'Are there any blackout dates for cancellation?', a:'No blackout dates! You can cancel any booking anytime with ZERO penalties — that\'s the corporate travel promise.' },
+    ]
+  },
+  {
+    id:'modify', icon:'✏️', title:'Modifications & Changes', color:'#dd6b20',
+    faqs:[
+      { q:'Can I change my travel dates?', a:'Absolutely! You can change your travel dates anytime <b>free of cost</b>. Just login to MyBiz and modify your booking.' },
+      { q:'Can I change the flight time?', a:'Yes, you can switch to a different flight time on the same day or a different date without any extra charges.' },
+      { q:'Can I change passenger details?', a:'Yes, you can update passenger names, contact details, and other information anytime before your journey.' },
+      { q:'Can I upgrade my hotel or flight class?', a:'Yes! You can upgrade to a higher category hotel or premium flight cabin. You\'ll pay only the price difference — no extra fees.' },
+      { q:'Can I downgrade my booking?', a:'Yes. You can downgrade to a lower category anytime and the credit difference will be added to your MyBiz wallet.' },
+      { q:'Is there a deadline to modify a booking?', a:'You can modify most bookings up to <b>24 hours before travel</b>. Some special fares allow modification right up until check-in.' },
+    ]
+  },
+  {
+    id:'meals', icon:'🍽️', title:'Corporate Meals Benefit', color:'#38a169',
+    faqs:[
+      { q:'What is the Corporate Meals Benefit?', a:'It\'s a feature that allows you to book corporate meal services along with your travel without any personal fund deductions.' },
+      { q:'How does corporate meals work?', a:'When you book a hotel via MyBiz, you can add meal packages. The cost is managed through corporate channels — no personal money involved.' },
+      { q:'Is corporate meals usage mandatory?', a:'No, it\'s entirely optional. You can book hotels with or without corporate meals as per your preference and trip requirement.' },
+      { q:'What meals are typically included?', a:'Breakfast, lunch, dinner, and refreshments. The exact meal options depend on your selected hotel and package.' },
+      { q:'Can I customize my meal preferences?', a:'Yes! You can specify dietary requirements, allergies, and food preferences (vegetarian, vegan, Jain, etc.) during booking.' },
+      { q:'Will there be reimbursement paperwork for meals?', a:'No! Corporate meals are directly managed by the company. No reimbursement forms or receipts are needed from your end.' },
+    ]
+  },
+  {
+    id:'intl', icon:'🌍', title:'International Travel', color:'#2b6cb0',
+    faqs:[
+      { q:'Can I book international flights on MyBiz?', a:'Yes! MyBiz covers <b>200+ countries</b> worldwide. You get the same corporate discounts and benefits for international travel.' },
+      { q:'How do I find the best international deals?', a:'Use the dedicated support team — call <b>1800-102-1234</b> and they\'ll find the best and most economical international options for you.' },
+      { q:'Do you provide visa information?', a:'Yes, the MyBiz support team can provide visa information and guidance for most countries. For specific visa processing, they guide you to official embassy channels.' },
+      { q:'Does MyBiz offer travel insurance?', a:'Yes! MyBiz offers travel insurance add-ons at checkout to cover medical emergencies, trip cancellations, and baggage loss.' },
+      { q:'Are currency conversions handled automatically?', a:'Yes, all prices are automatically converted to INR. You always see the final price in rupees before making payment.' },
+      { q:'Can I book multi-city international trips?', a:'Yes! You can book multiple segments as a connected itinerary. The support team can help design your complete multi-city trip.' },
+    ]
+  },
+  {
+    id:'cashback', icon:'💰', title:'Cashback & Rewards', color:'#b7791f',
+    faqs:[
+      { q:'How do I get 5% cashback on flights?', a:'Book with <b>YES BANK RazorpayX Corporate Card</b> and use code <b>MYBIZRAZORPAY</b> at checkout to get 5% cashback on flight bookings.' },
+      { q:'Where is cashback credited?', a:'Cashback is credited to your <b>MyBiz wallet</b> within 48 hours of booking. You can use it for any future travel booking on the platform.' },
+      { q:'Can I combine cashback with other discounts?', a:'Yes! You get both — <b>15–25% discount PLUS 5% cashback</b> simultaneously when you meet the offer conditions.' },
+      { q:'Do I need to do anything special to earn rewards?', a:'No! Rewards are automatic. Simply book normally with the right payment method and they\'re credited to your account.' },
+      { q:'Can I withdraw cashback as real money?', a:'Cashback accumulates in your MyBiz wallet and can be used towards all travel bookings on the platform. Direct bank withdrawal is not available.' },
+    ]
+  },
+  {
+    id:'support', icon:'📞', title:'Support & Help', color:'#6b46c1',
+    faqs:[
+      { q:'What are MyBiz support channels?', a:'Three ways to reach MyBiz support: 📱 <b>Call:</b> 1800-102-1234 (toll-free) | 💬 <b>Live Chat:</b> on MyBiz portal | 📧 <b>Email:</b> corporate@makemytrip.com' },
+      { q:'Is support available 24/7?', a:'Yes! The dedicated MyBiz corporate support team is available <b>24 hours, 7 days a week</b> — including public holidays.' },
+      { q:'How fast will I get a response?', a:'📞 Phone: Immediate | 💬 Live Chat: Instant | 📧 Email: Within 2 hours — all response times are guaranteed.' },
+      { q:'What if I face a technical issue on MyBiz?', a:'Contact the support team immediately via any channel. Technical issues are resolved within <b>2 hours</b> or an alternative solution is provided.' },
+      { q:'Who do I contact for Wiom Nomad travel requests?', a:'For Wiom Nomad (this portal), contact Travel Desk: <b>Gaurav Kumar</b> at gaurav.kumar@wiom.in. For MyBiz platform issues, use 1800-102-1234.' },
+      { q:'Is there a help section inside the MyBiz app?', a:'Yes! MyBiz has a comprehensive Help section with video tutorials, step-by-step guides, and FAQs available both in the app and on the website.' },
+    ]
+  },
+  {
+    id:'safety', icon:'🔒', title:'Safety & Security', color:'#4a5568',
+    faqs:[
+      { q:'Is MyBiz safe to use?', a:'Yes, 100% safe. MyBiz uses <b>industry-standard encryption</b> and security protocols to protect all your data and transactions.' },
+      { q:'Is my payment information secure?', a:'All payment data is encrypted and processed through <b>trusted, certified payment gateways</b>. It is never stored unsecured on any server.' },
+      { q:'Who can access my booking data?', a:'Only <b>you and the MyBiz support team</b> (when needed for assistance) can access your data. It is confidential and fully protected.' },
+      { q:'Can someone else cancel my booking?', a:'No. Only you can cancel your booking as it requires your secure login credentials to make any changes.' },
+      { q:'Is my personal data shared with third parties?', a:'No! Your personal data is <b>never shared with third parties</b>. MyBiz strictly follows data privacy laws and internal privacy policies.' },
+    ]
+  },
+];
+
+let faqSearch = '';
+function toggleFAQ(id) {
+  const el = document.getElementById('faq_'+id);
+  if (el) el.classList.toggle('open');
+}
+function filterFAQ(val) {
+  faqSearch = val.toLowerCase();
+  const wrap = document.getElementById('faqWrap');
+  if (!wrap) return;
+  wrap.querySelectorAll('.faq-category').forEach(cat => {
+    let anyVisible = false;
+    cat.querySelectorAll('.faq-item').forEach(item => {
+      const q = item.querySelector('.q-text').textContent.toLowerCase();
+      const a = item.querySelector('.faq-answer').textContent.toLowerCase();
+      const match = !faqSearch || q.includes(faqSearch) || a.includes(faqSearch);
+      item.style.display = match ? '' : 'none';
+      if (match) anyVisible = true;
+      if (faqSearch && match) item.classList.add('open');
+    });
+    cat.style.display = anyVisible ? '' : 'none';
+  });
+}
+function renderFAQ() {
+  let idxCounter = 0;
+  const cats = FAQ_DATA.map(cat => {
+    const items = cat.faqs.map(f => {
+      const uid = cat.id + '_' + (idxCounter++);
+      return `<div class="faq-item" id="faq_${uid}">
+        <div class="faq-question" onclick="toggleFAQ('${uid}')">
+          <span class="q-text">${f.q}</span>
+          <span class="faq-chevron">▼</span>
+        </div>
+        <div class="faq-answer"><span class="ans-badge">✅ Ans</span>${f.a}</div>
+      </div>`;
+    }).join('');
+    return `<div class="faq-category">
+      <div class="faq-cat-header" style="background:${cat.color}">${cat.icon} ${cat.title} <span class="faq-count-badge" style="background:rgba(255,255,255,0.25);color:#fff">${cat.faqs.length} FAQs</span></div>
+      ${items}
+    </div>`;
+  }).join('');
+
+  const totalFAQs = FAQ_DATA.reduce((s,c)=>s+c.faqs.length,0);
+  return `
+    <div class="faq-wrap" id="faqWrap">
+      <div class="faq-search-box">
+        <span style="font-size:16px">🔍</span>
+        <input type="text" placeholder="Search FAQs... (e.g. cancellation, hotel limit, approval)" oninput="filterFAQ(this.value)" />
+        <span style="font-size:12px;color:#a0aec0;white-space:nowrap">${totalFAQs} FAQs across ${FAQ_DATA.length} categories</span>
+      </div>
+      ${cats}
+      <div class="faq-contact">
+        <div>
+          <h4>Still have questions?</h4>
+          <p style="font-size:12px;opacity:0.7">MyBiz support is available 24×7</p>
+        </div>
+        <div class="faq-contact-chips">
+          <span class="faq-chip">📱 1800-102-1234</span>
+          <span class="faq-chip">💬 Live Chat on MyBiz</span>
+          <span class="faq-chip">📧 corporate@makemytrip.com</span>
+          <span class="faq-chip">📧 gaurav.kumar@wiom.in (Travel Desk)</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ═══ TRAVEL POLICY ═══
+function renderTravelPolicy() {
+  return `
+    <div class="policy-wrap">
+      <div class="policy-header">
+        <h3>📜 Travel &amp; Accommodation Policy</h3>
+        <p>Wiom — Omnia Information Pvt. Ltd. &nbsp;|&nbsp; Official entitlements for all employees</p>
+      </div>
+      <div class="policy-card">
+        <div class="policy-sec-title">✈️ 3.1 Travel Mode Entitlements</div>
+        <table class="policy-table">
+          <thead><tr><th>Mode</th><th>Condition</th><th>Entitlement</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>✈️ <strong>Flight</strong></td>
+              <td>Distance &gt; 800 km</td>
+              <td><span class="policy-pill">Economy Class</span></td>
+            </tr>
+            <tr>
+              <td>🚂 <strong>Train</strong></td>
+              <td>Distance up to 800 km</td>
+              <td><span class="policy-pill">3AC (Three-Tier AC)</span></td>
+            </tr>
+            <tr>
+              <td>🚌 <strong>Bus</strong></td>
+              <td>As applicable</td>
+              <td><span class="policy-pill">AC Sleeper / Volvo</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="policy-sec-title" style="margin-top:24px;">🏨 3.3 Hotel Accommodation Limits</div>
+        <table class="policy-table">
+          <thead><tr><th>Location Type</th><th>Example Cities</th><th>Per Night Limit</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>🏙️ <strong>Metro Cities</strong></td>
+              <td style="color:#718096;font-size:12px;">Mumbai, Delhi, Bangalore, Hyderabad, Chennai, Kolkata, Pune, Ahmedabad</td>
+              <td><span class="policy-pill" style="background:#f0fff4;color:#276749;border-color:rgba(39,103,73,0.2);">₹4,500 / night</span></td>
+            </tr>
+            <tr>
+              <td>🏘️ <strong>Non-Metro / Tier-2 / Tier-3</strong></td>
+              <td style="color:#718096;font-size:12px;">All other cities and towns</td>
+              <td><span class="policy-pill" style="background:#ebf8ff;color:#2b6cb0;border-color:rgba(43,108,176,0.2);">₹2,500 / night</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="policy-note">
+          <strong>⚠️ Note:</strong> All travel bookings must follow the above entitlements. Requests exceeding policy limits require prior written approval from the Function Head. Hotel bills above the per-night cap will not be reimbursed without pre-approval.
+        </div>
+      </div>
+    </div>`;
+}
+
+// ═══ ANALYTICS ═══
+function renderAnalytics() {
+  const byStatus = {PENDING_MANAGER:0,PENDING_FUNCTION_HEAD:0,PENDING_TRAVEL_DESK:0,PROCESSED:0,REJECTED:0,CANCELLED:0};
+  const byType   = {Flight:0,Train:0,Bus:0,Hotel:0};
+  const byEmp    = {};
+  requests.forEach(r => {
+    byStatus[r.status]=(byStatus[r.status]||0)+1;
+    r.types.forEach(t=>byType[t]=(byType[t]||0)+1);
+    byEmp[r.employeeName]=(byEmp[r.employeeName]||0)+1;
+  });
+  const topEmp = Object.entries(byEmp).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  return `
+    <div class="analytics-grid">
+      <div class="chart-card">
+        <h3>📊 Requests by Status</h3>
+        <div class="chart-wrap"><canvas id="statusChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>🎫 Requests by Travel Type</h3>
+        <div class="chart-wrap"><canvas id="typeChart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>👤 Top Travelers</h3>
+      <table class="top-travelers">
+        <thead><tr><th>#</th><th>Employee</th><th>Total Requests</th><th>Progress</th></tr></thead>
+        <tbody>${topEmp.map(([name,count],i)=>`
+          <tr>
+            <td style="color:#a0aec0;font-weight:700">${i+1}</td>
+            <td style="font-weight:600">${name}</td>
+            <td><span style="background:#ebf4ff;color:#3182ce;padding:3px 10px;border-radius:10px;font-weight:700">${count}</span></td>
+            <td><div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;width:160px"><div style="background:#e94560;height:100%;border-radius:4px;width:${(count/requests.length*100).toFixed(0)}%"></div></div></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function drawCharts() {
+  const byStatus={PENDING_MANAGER:0,PENDING_FUNCTION_HEAD:0,PENDING_TRAVEL_DESK:0,PROCESSED:0,REJECTED:0};
+  const byType={Flight:0,Train:0,Bus:0,Hotel:0};
+  requests.forEach(r=>{byStatus[r.status]=(byStatus[r.status]||0)+1;r.types.forEach(t=>byType[t]=(byType[t]||0)+1);});
+
+  const sc=document.getElementById('statusChart');
+  const tc=document.getElementById('typeChart');
+  if(!sc||!tc)return;
+  if(chartInstances.status){chartInstances.status.destroy();}
+  if(chartInstances.type){chartInstances.type.destroy();}
+
+  chartInstances.status = new Chart(sc,{type:'doughnut',data:{labels:['Pending Manager','Pending FH','Pending TD','Processed','Rejected'],datasets:[{data:[byStatus.PENDING_MANAGER,byStatus.PENDING_FUNCTION_HEAD,byStatus.PENDING_TRAVEL_DESK,byStatus.PROCESSED,byStatus.REJECTED],backgroundColor:['#f6ad55','#63b3ed','#b794f4','#68d391','#fc8181'],borderWidth:3,borderColor:'#fff'}]},options:{cutout:'65%',plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},animation:{duration:800}}});
+
+  chartInstances.type = new Chart(tc,{type:'bar',data:{labels:['✈️ Flight','🚂 Train','🚌 Bus','🏨 Hotel'],datasets:[{data:[byType.Flight,byType.Train,byType.Bus,byType.Hotel],backgroundColor:['#e94560','#3498db','#2ecc71','#9b59b6'],borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}},animation:{duration:800}}});
+}
+
+// ═══ CALENDAR ═══
+function renderCalendar() {
+  const now   = new Date(calYear, calMonth, 1);
+  const mName = now.toLocaleString('en-IN',{month:'long',year:'numeric'});
+  const firstDay = now.getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const today = new Date();
+
+  // Map requests to travel dates
+  const tripMap = {};
+  requests.filter(r=>!['REJECTED','CANCELLED'].includes(r.status) && r.travelDate).forEach(r=>{
+    const d=r.travelDate; tripMap[d]=(tripMap[d]||[]);tripMap[d].push(r);
+  });
+
+  let days = '';
+  for(let i=0;i<firstDay;i++) days+=`<div class="cal-day other-month"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const trips=tripMap[dateStr]||[];
+    const isToday=today.getDate()===d&&today.getMonth()===calMonth&&today.getFullYear()===calYear;
+    days+=`<div class="cal-day${trips.length?' has-trip':''}${isToday?' today':''}" ${trips.length?`onclick="showCalDay('${dateStr}')"`:''}><div class="day-num">${d}</div>${trips.slice(0,2).map(t=>`<div class="trip-dot" style="color:${statusColor(t.status)};font-size:9px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">● ${t.employeeName.split(' ')[0]}</div>`).join('')}${trips.length>2?`<div style="font-size:9px;color:#a0aec0">+${trips.length-2} more</div>`:''}</div>`;
+  }
+
+  // Upcoming trips list
+  const upcoming = requests.filter(r=>!['REJECTED','CANCELLED'].includes(r.status)&&r.travelDate>=today.toISOString().split('T')[0]).sort((a,b)=>a.travelDate.localeCompare(b.travelDate)).slice(0,8);
+
+  return `
+    <div style="background:#fff;border-radius:14px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:20px;">
+      <div class="cal-header">
+        <button class="cal-nav" onclick="changeMonth(-1)">‹</button>
+        <h3>${mName}</h3>
+        <button class="cal-nav" onclick="changeMonth(1)">›</button>
+      </div>
+      <div class="cal-grid">
+        ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="cal-day-name">${d}</div>`).join('')}
+        ${days}
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:14px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:16px;">📋 Upcoming Trips</h3>
+      ${upcoming.length===0?`<p style="color:#a0aec0;font-size:13px;text-align:center;padding:20px;">No upcoming trips.</p>`:
+        upcoming.map(r=>`<div class="cal-event-item" style="border-left-color:${statusColor(r.status)}" onclick="openDetail('${r.id}')">
+          <div style="font-size:20px">${r.types.includes('Flight')?'✈️':r.types.includes('Train')?'🚂':r.types.includes('Bus')?'🚌':'🏨'}</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:700;color:#1a1a2e">${r.purpose}</div>
+            <div style="font-size:11px;color:#718096">${r.employeeName} &nbsp;•&nbsp; ${r.fromCity} → ${r.toCity} &nbsp;•&nbsp; ${fmtDate(r.travelDate)}</div>
+          </div>${statusBadge(r.status)}</div>`).join('')}
+    </div>`;
+}
+
+function changeMonth(dir){calMonth+=dir;if(calMonth>11){calMonth=0;calYear++;}else if(calMonth<0){calMonth=11;calYear--;}secTab='calendar';render();}
+function showCalDay(date){const trips=requests.filter(r=>r.travelDate===date);if(trips.length)openDetail(trips[0].id);}
+function statusColor(s){return{PENDING_MANAGER:'#f6ad55',PENDING_FUNCTION_HEAD:'#63b3ed',PENDING_TRAVEL_DESK:'#b794f4',PROCESSED:'#68d391',REJECTED:'#fc8181'}[s]||'#e2e8f0';}
+
+// ═══ EXPORT CSV ═══
+function exportCSV() {
+  const headers = ['ID','Employee','Dept','Purpose','Types','From','To','Travel Date','Return Date','Priority','Status','Manager','Function Head','Created'];
+  const rows = requests.map(r=>[r.id,r.employeeName,r.dept,`"${r.purpose}"`,r.types.join('+'),r.fromCity,r.toCity,r.travelDate||'',r.returnDate||'',r.priority||'Normal',r.status,r.manager,r.functionHead,r.createdAt?.split('T')[0]||''].join(','));
+  const csv = [headers.join(','),...rows].join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`Wiom_Travel_Requests_${today()}.csv`; a.click();
+}
+
+// ══════════════════════════════════════════
+// ═══         CHATBOT ENGINE            ═══
+// ══════════════════════════════════════════
+let chatOpen = false;
+let chatHistory = [];
+let chatGreeted = false;
+let chatTypingTimer = null;
+
+// ── Show chat bubble only after login ──
+function showChatBubble() {
+  const el = document.getElementById('chatBubble');
+  if (!el) return;
+  el.style.display   = 'block';
+  el.style.visibility = 'visible';
+  el.style.opacity    = '1';
+  if (!chatGreeted) {
+    setTimeout(() => {
+      const dot = document.getElementById('chatUnread');
+      if (dot) dot.style.display = 'block';
+    }, 1500);
+  }
+}
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const win = document.getElementById('chatWindow');
+  const icon = document.getElementById('chatFabIcon');
+  const unread = document.getElementById('chatUnread');
+  if (chatOpen) {
+    win.classList.remove('chat-hidden');
+    icon.textContent = '✕';
+    unread.style.display = 'none';
+    if (!chatGreeted) { chatGreeted = true; botGreet(); }
+    setTimeout(() => document.getElementById('chatInput').focus(), 300);
+  } else {
+    win.classList.add('chat-hidden');
+    icon.textContent = '💬';
+  }
+}
+
+// ── Add a message bubble ──
+function addMsg(text, from = 'bot', isHTML = false) {
+  const box = document.getElementById('chatMessages');
+  const now = new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+  const div = document.createElement('div');
+  div.className = `cmsg ${from}`;
+  const av = from === 'bot'
+    ? `<div class="cmsg-av">🤖</div>`
+    : `<div class="cmsg-av usr-av">👤</div>`;
+  div.innerHTML = `${av}
+    <div class="cmsg-body">
+      <div class="cmsg-bubble">${isHTML ? text : escapeHTML(text)}</div>
+      <span class="cmsg-time">${now}</span>
+    </div>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  chatHistory.push({ from, text });
+}
+
+function escapeHTML(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Typing indicator ──
+function showTyping() {
+  removeTyping();
+  const box = document.getElementById('chatMessages');
+  const t = document.createElement('div');
+  t.id = 'typingIndicator';
+  t.className = 'typing-wrap';
+  t.innerHTML = `<div class="cmsg-av">🤖</div>
+    <div class="typing-box"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>`;
+  box.appendChild(t);
+  box.scrollTop = box.scrollHeight;
+}
+function removeTyping() {
+  const t = document.getElementById('typingIndicator');
+  if (t) t.remove();
+}
+
+// ── Bot replies with a delay ──
+function botReply(htmlContent, delay = 900) {
+  showTyping();
+  clearTimeout(chatTypingTimer);
+  chatTypingTimer = setTimeout(() => {
+    removeTyping();
+    addMsg(htmlContent, 'bot', true);
+  }, delay);
+}
+
+// ── Welcome greeting ──
+function botGreet() {
+  const name = currentUser ? currentUser.name.split(' ')[0] : 'there';
+  botReply(`👋 <b>Hello ${name}!</b> Main hoon aapka <b>Nomad Assistant</b>.<br><br>
+    Main help kar sakta hoon:<br>
+    📜 <b>Travel Policy</b> — hotel limits, class entitlements<br>
+    ❓ <b>FAQ</b> — booking, cancellation, cashback, support<br><br>
+    Neeche se topic choose karein ya seedha type karein! 👇`, 600);
+  setTimeout(() => showMainMenu(), 700);
+}
+
+// ── Score a query against text ──
+function matchScore(query, text) {
+  const qWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  const t = text.toLowerCase();
+  let score = 0;
+  qWords.forEach(w => {
+    if (t.includes(w)) score += (w.length > 4 ? 2 : 1);
+  });
+  // Bonus for exact phrase match
+  if (t.includes(query.toLowerCase())) score += 5;
+  return score;
+}
+
+// ── Intent detection ──
+function detectIntent(q) {
+  const t = q.toLowerCase();
+  // Greetings
+  if (/^(hi|hello|hey|namaste|hii|helo|namaskar|sup|yo|good\s*(morning|afternoon|evening|day))/.test(t))
+    return 'greeting';
+  // Thanks
+  if (/(thanks|thank you|shukriya|dhanyawad|shukriya|thnx|ty\b|thx)/.test(t))
+    return 'thanks';
+  // Help menu
+  if (/^(help|menu|kya kar sakte|what can you do|options|topics)/.test(t))
+    return 'help';
+  // Policy - hotel
+  if (/(hotel.*(limit|cap|kitna|max|per night|rate)|hotel.*kharcha|kitna.*hotel|per night|raat.*hotel)/.test(t))
+    return 'policy_hotel';
+  // Policy - flight
+  if (/(flight.*(class|entitlement|eligible|economy|cabin)|economy.*class|business.*class|kis.*class.*flight)/.test(t))
+    return 'policy_flight';
+  // Policy - train
+  if (/(train.*(class|entitlement|eligible|3ac|ac)|3ac|3 ac|ac 3|kis.*class.*train)/.test(t))
+    return 'policy_train';
+  // Policy - bus
+  if (/(bus.*(class|type|entitlement|volvo|sleeper)|volvo|ac sleeper)/.test(t))
+    return 'policy_bus';
+  // Approval workflow
+  if (/(approv|workflow|process|kitne din|how long|steps|stages|kab.*approve|approve.*kab)/.test(t))
+    return 'faq_search';
+  // Contact / Support
+  if (/(contact|support|phone|number|email|helpline|call|reach)/.test(t))
+    return 'contact';
+  return 'search';
+}
+
+// ── Travel policy answers ──
+const POLICY_ANSWERS = {
+  policy_hotel: {
+    q: '🏨 Hotel Accommodation Limits',
+    a: `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;">
+      <tr style="background:#f0fff4"><th style="padding:6px 8px;text-align:left;border:1px solid #9ae6b4">City Type</th><th style="padding:6px 8px;border:1px solid #9ae6b4">Per Night Limit</th></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #e2e8f0">🏙️ Metro Cities<br><small style="color:#718096">Mumbai, Delhi, Bangalore, etc.</small></td><td style="padding:6px 8px;border:1px solid #e2e8f0;font-weight:700;color:#276749">₹4,500</td></tr>
+      <tr style="background:#f7fafc"><td style="padding:6px 8px;border:1px solid #e2e8f0">🏘️ Non-Metro / Tier-2 / Tier-3</td><td style="padding:6px 8px;border:1px solid #e2e8f0;font-weight:700;color:#2b6cb0">₹2,500</td></tr>
+    </table>
+    <div style="margin-top:8px;font-size:11px;color:#744210;background:#fffbeb;padding:6px 8px;border-radius:8px;">⚠️ Limit से ज़्यादा booking के लिए Function Head approval ज़रूरी है।</div>`
+  },
+  policy_flight: {
+    q: '✈️ Flight Entitlement',
+    a: `Distance <b>&gt; 800 km</b> होने पर Flight eligible है।<br>Class: <span style="background:#fff0f8;color:#E81B8C;padding:2px 8px;border-radius:8px;font-weight:700;">Economy Class only</span><br><small style="color:#718096">Business/Premium class के लिए Function Head approval चाहिए।</small>`
+  },
+  policy_train: {
+    q: '🚂 Train Entitlement',
+    a: `Distance <b>≤ 800 km</b> होने पर Train preferred है।<br>Class: <span style="background:#fff0f8;color:#E81B8C;padding:2px 8px;border-radius:8px;font-weight:700;">3AC (Three-Tier AC)</span><br><small style="color:#718096">2AC / 1AC upgrade के लिए Function Head approval चाहिए।</small>`
+  },
+  policy_bus: {
+    q: '🚌 Bus Entitlement',
+    a: `Bus travel के लिए entitlement:<br>Type: <span style="background:#fff0f8;color:#E81B8C;padding:2px 8px;border-radius:8px;font-weight:700;">AC Sleeper / Volvo</span><br><small style="color:#718096">Non-AC options के लिए prior approval लें।</small>`
+  },
+  contact: {
+    q: '📞 Support Contacts',
+    a: `<b>MyBiz Platform:</b><br>
+    📱 Toll-Free: <b>1800-102-1234</b><br>
+    💬 Live Chat: mybiz.makemytrip.com<br>
+    📧 corporate@makemytrip.com<br><br>
+    <b>Wiom Nomad Travel Desk:</b><br>
+    📧 gaurav.kumar@wiom.in<br>
+    ⏰ Support available 24×7`
+  }
+};
+
+// ── Main: search across all FAQs ──
+function searchFAQs(query) {
+  const results = [];
+  FAQ_DATA.forEach(cat => {
+    cat.faqs.forEach(f => {
+      const score = matchScore(query, f.q + ' ' + f.a);
+      if (score > 0) results.push({ score, q: f.q, a: f.a, icon: cat.icon, cat: cat.title });
+    });
+  });
+  return results.sort((a, b) => b.score - a.score).slice(0, 3);
+}
+
+// ── Build result card HTML ──
+function resultCardHTML(item, type = 'faq') {
+  const cls = type === 'policy' ? 'policy-card-bot' : 'result-card';
+  // Sanitize answer (strip HTML tags for plain text display)
+  const plainA = item.a.replace(/<[^>]+>/g, '').substring(0, 160) + (item.a.length > 160 ? '…' : '');
+  return `<div class="${cls}"><div class="rc-q">${item.icon || '❓'} ${item.q}</div><div class="rc-a">${plainA}</div></div>`;
+}
+
+// ── Process user input ──
+function processUserMessage(input) {
+  const intent = detectIntent(input);
+
+  if (intent === 'greeting') {
+    const name = currentUser ? currentUser.name.split(' ')[0] : '';
+    botReply(`😊 Hello ${name}! Kya help kar sakta hoon aapki?<br>
+      Travel policy, FAQ, booking process — kuch bhi poochh sakte hain!`);
+    return;
+  }
+  if (intent === 'thanks') {
+    botReply(`🙏 Khushi hui madad karke! Aur kuch poochhna ho toh batayein. ✈️`);
+    return;
+  }
+  if (intent === 'help') {
+    botReply(`<b>Main inn topics mein help kar sakta hoon:</b><br><br>
+      🏨 <b>Hotel limits</b> — "hotel limit kya hai?"<br>
+      ✈️ <b>Flight class</b> — "flight entitlement?"<br>
+      🚂 <b>Train class</b> — "train class kya hai?"<br>
+      ❌ <b>Cancel policy</b> — "cancel kaise karein?"<br>
+      💰 <b>Cashback</b> — "cashback kaise milega?"<br>
+      📋 <b>Portal usage</b> — "request kaise submit karein?"<br>
+      📞 <b>Support</b> — "contact number kya hai?"<br><br>
+      <i>Ya seedha apna sawaal type karein! 👇</i>`);
+    return;
+  }
+  if (POLICY_ANSWERS[intent]) {
+    const p = POLICY_ANSWERS[intent];
+    botReply(`<b>${p.q}</b><br>${p.a}`);
+    return;
+  }
+
+  // FAQ search
+  const results = searchFAQs(input);
+  if (results.length > 0) {
+    const top = results[0];
+    let html = `<b>${top.icon} ${top.q}</b><br><br>${top.a}`;
+    if (results.length > 1) {
+      html += `<br><br><b style="font-size:11px;color:#718096">Related questions:</b>`;
+      results.slice(1).forEach(r => { html += resultCardHTML(r); });
+    }
+    botReply(html, true);
+    return;
+  }
+
+  // No match fallback
+  botReply(`🤔 Mujhe is sawaal ka seedha jawab nahi mila.<br><br>
+    Kya aap yeh try kar sakte hain?<br>
+    • "Hotel limit kya hai?"<br>
+    • "Cancel policy?"<br>
+    • "Request kaise submit karein?"<br>
+    • "Support contact?"<br><br>
+    Ya Travel Desk ko directly contact karein:<br>📧 <b>gaurav.kumar@wiom.in</b>`);
+}
+
+// ── Send from input box ──
+function sendChat() {
+  const inp = document.getElementById('chatInput');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  addMsg(text, 'usr');
+  processUserMessage(text);
+}
+
+// ── Quick reply menu levels ──
+function showMainMenu() {
+  document.getElementById('quickBtns').innerHTML = `
+    <button class="qbtn qbtn-main" onclick="showPolicyMenu()">📜 Travel Policy</button>
+    <button class="qbtn qbtn-main" onclick="showFAQMenu()">❓ FAQ</button>`;
+}
+
+function showPolicyMenu() {
+  addMsg('📜 Travel Policy', 'usr');
+  botReply('Kaun si policy detail chahiye? 👇', 350);
+  document.getElementById('quickBtns').innerHTML = `
+    <button class="qbtn" onclick="sendQuick('Hotel limit kya hai?')">🏨 Hotel limit?</button>
+    <button class="qbtn" onclick="sendQuick('Flight entitlement kya hai?')">✈️ Flight class?</button>
+    <button class="qbtn" onclick="sendQuick('Train entitlement kya hai?')">🚂 Train class?</button>
+    <button class="qbtn" onclick="sendQuick('Bus entitlement kya hai?')">🚌 Bus type?</button>
+    <button class="qbtn qbtn-back" onclick="showMainMenu()">⬅ Back</button>`;
+}
+
+function showFAQMenu() {
+  addMsg('❓ FAQ', 'usr');
+  botReply('Kaunse topic ke baare mein poochhna hai? 👇', 350);
+  document.getElementById('quickBtns').innerHTML = `
+    <button class="qbtn" onclick="sendQuick('Booking kaise karein?')">💳 Booking</button>
+    <button class="qbtn" onclick="sendQuick('Cancel policy kya hai?')">❌ Cancellation</button>
+    <button class="qbtn" onclick="sendQuick('Cashback kaise milega?')">💰 Cashback</button>
+    <button class="qbtn" onclick="sendQuick('Travel dates modify kar sakte hain?')">✏️ Modifications</button>
+    <button class="qbtn" onclick="sendQuick('International flights book kar sakte hain?')">🌍 International</button>
+    <button class="qbtn" onclick="sendQuick('Support contact number kya hai?')">📞 Support</button>
+    <button class="qbtn" onclick="sendQuick('Request kaise submit karein?')">📋 How to submit?</button>
+    <button class="qbtn qbtn-back" onclick="showMainMenu()">⬅ Back</button>`;
+}
+
+// ── Send from quick reply buttons ──
+function sendQuick(text) {
+  addMsg(text, 'usr');
+  processUserMessage(text);
+  const box = document.getElementById('chatMessages');
+  setTimeout(() => box.scrollTop = box.scrollHeight, 100);
+  // After answering, show main menu again after delay
+  setTimeout(() => showMainMenu(), 1600);
+}
+
+// ─── Hook into login to show chatbot ───
+const _origEnterPortal = typeof enterPortal === 'function' ? enterPortal : null;
+function hookChatOnLogin() {
+  showChatBubble();
+}
+
+// ═══ START ═══
+init();
+</script>
+</body>
+</html>
