@@ -1071,8 +1071,9 @@ function updateNotifBadge() {
   else { badge.style.display='none'; }
 }
 
-// ─── WORKFLOW BANNER ───
+// ─── WORKFLOW BANNER (hidden — logic intact) ───
 function wfBanner(activeStep, stepsOverride) {
+  return ''; // Visual banner removed, workflow logic unchanged
   const steps = stepsOverride || [
     {label:'Employee',  color:'#3182ce'},
     {label:'Manager',   color:'#dd6b20'},
