@@ -1117,8 +1117,16 @@ function wfBanner(activeStep, stepsOverride) {
 
 // ─── EMPLOYEE VIEW ───
 function renderEmployee(c) {
-  const mine = requests.filter(r=>r.employeeId===currentUser.id).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-  const inProg = mine.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length;
+  const mine      = requests.filter(r=>r.employeeId===currentUser.id).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const inProg    = mine.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status));
+  const processed = mine.filter(r=>r.status==='PROCESSED');
+  const rejected  = mine.filter(r=>['REJECTED','CANCELLED'].includes(r.status));
+
+  const showList = secTab==='pending'   ? inProg
+                 : secTab==='done'      ? processed
+                 : secTab==='rejected'  ? rejected
+                 : mine;
+
   c.innerHTML = `
     ${wfBanner(1)}
     <div class="page-header">
@@ -1126,21 +1134,23 @@ function renderEmployee(c) {
       <button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>
     </div>
     <div class="stats-row">
-      <div class="stat-card" onclick="setTab('all')" style="cursor:pointer"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${mine.length}</h3><p>Total Requests</p></div></div>
-      <div class="stat-card" onclick="setTab('pending')" style="cursor:pointer"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${inProg}</h3><p>In Progress</p></div></div>
-      <div class="stat-card" onclick="setTab('done')" style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>r.status==='PROCESSED').length}</h3><p>Processed</p></div></div>
-      <div class="stat-card" onclick="setTab('done')" style="cursor:pointer"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>['REJECTED','CANCELLED'].includes(r.status)).length}</h3><p>Rejected/Cancelled</p></div></div>
+      <div class="stat-card" onclick="setTab('all')"      style="cursor:pointer"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${mine.length}</h3><p>Total Requests</p></div></div>
+      <div class="stat-card" onclick="setTab('pending')"  style="cursor:pointer"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${inProg.length}</h3><p>In Progress</p></div></div>
+      <div class="stat-card" onclick="setTab('done')"     style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${processed.length}</h3><p>Processed</p></div></div>
+      <div class="stat-card" onclick="setTab('rejected')" style="cursor:pointer"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${rejected.length}</h3><p>Rejected</p></div></div>
     </div>
     <div class="section-tabs">
-      <button class="sec-tab ${secTab==='all'?'active':''}" onclick="setTab('all')">📋 All (${mine.length})</button>
-      <button class="sec-tab ${secTab==='pending'?'active':''}" onclick="setTab('pending')">⏳ In Progress <span class="tab-count">${inProg}</span></button>
-      <button class="sec-tab ${secTab==='done'?'active':''}" onclick="setTab('done')">✅ Completed (${mine.filter(r=>['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length})</button>
-      <button class="sec-tab ${secTab==='policy'?'active':''}" onclick="setTab('policy')">📜 Travel Policy</button>
-      <button class="sec-tab ${secTab==='faq'?'active':''}" onclick="setTab('faq')">❓ FAQ</button>
+      <button class="sec-tab ${secTab==='all'?'active':''}"      onclick="setTab('all')">📋 All (${mine.length})</button>
+      <button class="sec-tab ${secTab==='pending'?'active':''}"  onclick="setTab('pending')">⏳ In Progress ${inProg.length>0?`<span class="tab-count">${inProg.length}</span>`:''}</button>
+      <button class="sec-tab ${secTab==='done'?'active':''}"     onclick="setTab('done')">✅ Processed (${processed.length})</button>
+      <button class="sec-tab ${secTab==='rejected'?'active':''}" onclick="setTab('rejected')">❌ Rejected ${rejected.length>0?`<span class="tab-count" style="background:#e53e3e">${rejected.length}</span>`:''}</button>
+      <button class="sec-tab ${secTab==='policy'?'active':''}"   onclick="setTab('policy')">📜 Travel Policy</button>
+      <button class="sec-tab ${secTab==='faq'?'active':''}"      onclick="setTab('faq')">❓ FAQ</button>
     </div>
     ${secTab==='policy' ? renderTravelPolicy() : secTab==='faq' ? renderFAQ() : `<div class="requests-grid">
-      ${(secTab==='pending'?mine.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status)):secTab==='done'?mine.filter(r=>['PROCESSED','REJECTED','CANCELLED'].includes(r.status)):mine)
-        .map(r=>reqCard(r,'employee')).join('') || `<div class="empty-state"><div class="e-icon">✈️</div><p>No requests here.<br>Click <b>"New Travel Request"</b> to get started!</p></div>`}
+      ${showList.map(r=>reqCard(r,'employee')).join('') ||
+        `<div class="empty-state"><div class="e-icon">${secTab==='rejected'?'❌':'✈️'}</div>
+         <p>${secTab==='rejected'?'No rejected requests!':'No requests here.<br>Click <b>"New Travel Request"</b> to get started!'}</p></div>`}
     </div>`}`;
 }
 
