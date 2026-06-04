@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,5 +10,6 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Wiom Nomad running on port ${PORT}`);
+  console.log(`Wiom Pravash running on port ${PORT}`);
 });
+
