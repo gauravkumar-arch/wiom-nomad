@@ -1802,7 +1802,7 @@ function openDetail(reqId) {
   const p=document.getElementById('detailPanel');
   p.innerHTML=`
     <div class="modal-header">
-      <div><h3>📋 ${r.id} ${priorityBadge(r.priority||'Normal')}</h3><div style="margin-top:6px">${statusBadge(r.status)}</div></div>
+      <div><h3>📋 ${r.id} ${priorityBadge(r.priority||'Normal')}</h3><div style="margin-top:6px">${(currentUser.role==='manager'||currentUser.role==='function_head')?'':statusBadge(r.status)}</div></div>
       <button class="close-btn" onclick="closeDetail()">✕</button>
     </div>
     <div style="margin-bottom:16px">${stepper(r.status)}</div>
