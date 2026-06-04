@@ -878,6 +878,43 @@ function render() {
   else if (r==='manager')       renderManager(c);
   else if (r==='function_head') renderFunctionHead(c);
   else                          renderTravelDesk(c);
+  // ── Check pending email notifications for current user ──
+  setTimeout(() => checkPendingEmailNotifs(), 800);
+}
+
+function checkPendingEmailNotifs() {
+  if (!currentUser) return;
+  const role = currentUser.role;
+
+  // Employee: check pending notifications
+  if (role === 'employee') {
+    // Approval email (MyBiz link)
+    const approvalNotif = requests.find(r => r.employeeId === currentUser.id && r.empEmailPending);
+    if (approvalNotif) {
+      approvalNotif.empEmailPending = false;
+      save();
+      showMyBizEmail(approvalNotif); // ✅ Shows on EMPLOYEE screen
+      return;
+    }
+    // Booking confirmation email
+    const confirmNotif = requests.find(r => r.employeeId === currentUser.id && r.bookingConfirmPending);
+    if (confirmNotif) {
+      confirmNotif.bookingConfirmPending = false;
+      save();
+      showBookingConfirmEmail(confirmNotif); // ✅ Shows on EMPLOYEE screen
+      return;
+    }
+  }
+
+  // Travel Desk: check if any requests have tdEmailPending = true
+  if (role === 'travel_desk') {
+    const tdPending = requests.find(r => r.tdEmailPending);
+    if (tdPending) {
+      tdPending.tdEmailPending = false; // clear flag
+      save();
+      showTravelDeskNotif(tdPending); // now shows on TRAVEL DESK's screen ✅
+    }
+  }
 }
 
 function updateNotifBadge() {
@@ -1415,10 +1452,17 @@ function confirmApprove(){
   } else {
     req.status='PENDING_TRAVEL_DESK';
     req.history.push({action:'APPROVED BY FUNCTION HEAD',by:currentUser.name,role:'Function Head',date:today(),comment});
-    const snapReq = JSON.parse(JSON.stringify(req)); // snapshot before render
+    // Mark pending email notifications (will show when recipients login)
+    req.empEmailPending = true;       // Employee will see MyBiz email on next login
+    req.tdEmailPending  = true;       // Travel Desk will see booking notif on next login
+    const approvedBy = currentUser.name;
+    const empUser = USERS.find(u=>u.id===req.employeeId);
+    const empEmail = empUser ? empUser.email : req.employeeName.toLowerCase().replace(' ','')+'@wiom.in';
+    const tdUser = USERS.find(u=>u.role==='travel_desk');
+    const tdEmail = tdUser ? tdUser.email : 'gaurav.kumar@wiom.in';
     save();closeApproveModal();render();
-    showMyBizEmail(snapReq);         // Email 1: Employee → MyBiz booking link
-    showTravelDeskNotif(snapReq);    // Email 2: Travel Desk → please process
+    // Toast to Function Head — emails sent silently
+    showToast(`✅ Emails sent — ${empEmail} (MyBiz link) & ${tdEmail} (Travel Desk notified)`, 'success');
   }
 }
 
@@ -1600,9 +1644,12 @@ function confirmProcess(){
   const req=requests.find(r=>r.id===pendingAct.reqId); if(!req)return;
   req.status='PROCESSED'; req.bookingRef=ref||'N/A'; req.bookingNotes=notes;
   req.history.push({action:'PROCESSED BY TRAVEL DESK',by:currentUser.name,role:'Travel Desk',date:today(),comment:`Ref: ${req.bookingRef}. ${notes}`});
-  const snapProc = JSON.parse(JSON.stringify(req));
+  req.bookingConfirmPending = true;  // Employee will see confirmation on next login
+  const tdUser2 = USERS.find(u=>u.role==='travel_desk');
+  const empUser2 = USERS.find(u=>u.id===req.employeeId);
+  const empEmail2 = empUser2 ? empUser2.email : req.employeeName.toLowerCase().replace(' ','')+'@wiom.in';
   save();closeProcessModal();render();
-  showBookingConfirmEmail(snapProc); // Email 3: Employee → booking confirmed
+  showToast(`✅ Booking confirmed! Confirmation email sent to ${empEmail2}`, 'success');
 }
 
 // ═══ DETAIL PANEL ═══
