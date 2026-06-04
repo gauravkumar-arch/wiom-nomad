@@ -814,11 +814,7 @@ function init() {
   const stored = localStorage.getItem('wiom_travel_v3');
   requests = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(SEED));
   if (!stored) save();
-
-  const normalUsers = USERS.filter(u => u.role !== 'travel_desk');
-  document.getElementById('userLoginSelect').innerHTML = normalUsers.map(u =>
-    `<option value="${u.id}">${u.name} — ${ROLE_LABELS[u.role]}</option>`
-  ).join('');
+  // userLoginSelect removed — now using OTP login
 }
 
 function save() { localStorage.setItem('wiom_travel_v3', JSON.stringify(requests)); }
@@ -832,9 +828,8 @@ function resetDemo() {
 
 // ═══ LOGIN ═══
 function loginAsUser() {
-  const id = document.getElementById('userLoginSelect').value;
-  currentUser = USERS.find(u => u.id === id);
-  secTab = 'pending'; enterPortal();
+  // Legacy — now handled by OTP verifyOTP()
+  if (_otpUser) { currentUser = _otpUser; secTab='pending'; enterPortal(); }
 }
 function loginAsAdmin() {
   currentUser = USERS.find(u => u.role === 'travel_desk');
