@@ -160,6 +160,20 @@
     .cond-section.visible { display:block; }
     .cond-title { font-size:12px; font-weight:700; color:#4a5568; margin-bottom:12px; }
     .form-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; padding-top:16px; border-top:1px solid #e2e8f0; }
+    /* ─── POLICY NOTICE / EXCEPTION ─── */
+    .policy-notice { border-radius:10px; padding:12px 16px; margin:12px 0; font-size:12px; line-height:1.6; }
+    .policy-notice.warning { background:#fff3cd; border:1.5px solid #f6c90e; color:#744210; }
+    .policy-notice.error   { background:#fff5f5; border:1.5px solid #fc8181; color:#c53030; }
+    .policy-notice.ok      { background:#f0fff4; border:1.5px solid #9ae6b4; color:#276749; }
+    .exception-box { background:#fff8f0; border:1.5px solid #ed8936; border-radius:12px; padding:16px; margin:12px 0; }
+    .exception-title { font-size:13px; font-weight:800; color:#c05621; margin-bottom:12px; }
+    .file-upload-wrap { border:2px dashed #ed8936; border-radius:10px; padding:14px; text-align:center; cursor:pointer; transition:all 0.2s; margin-top:8px; }
+    .file-upload-wrap:hover { background:#fff3e0; border-color:#dd6b20; }
+    .file-upload-wrap input[type=file] { display:none; }
+    .file-upload-label { font-size:12px; color:#c05621; font-weight:600; cursor:pointer; }
+    .file-selected { background:#f0fff4; border-color:#9ae6b4; border-style:solid; }
+    .file-selected .file-upload-label { color:#276749; }
+
     /* ─── DECLARATION BOX ─── */
     .declaration-box { background:#fffbeb; border:1.5px solid #f6c90e; border-radius:12px; padding:16px 20px; margin-top:16px; }
     .declaration-title { font-size:13px; font-weight:800; color:#744210; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
@@ -594,7 +608,7 @@
       <div class="form-section" id="sec_travelRoute">
         <div class="form-section-title">📅 Travel Dates & Route</div>
         <div class="form-row">
-          <div class="form-group"><label>Travel Date *</label><input type="date" id="f_travelDate" required onchange="setMinDate('f_travelDate','f_returnDate')"/></div>
+          <div class="form-group"><label>Travel Date *</label><input type="date" id="f_travelDate" required onchange="setMinDate('f_travelDate','f_returnDate');checkBookingPolicy()"/></div>
           <div class="form-group"><label>Return Date</label><input type="date" id="f_returnDate"/></div>
         </div>
         <div class="form-row">
@@ -675,7 +689,7 @@
           </div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>Check-in Date</label><input type="date" id="f_hCheckin" onchange="setMinDate('f_hCheckin','f_hCheckout')"/></div>
+          <div class="form-group"><label>Check-in Date</label><input type="date" id="f_hCheckin" onchange="setMinDate('f_hCheckin','f_hCheckout');checkBookingPolicy()"/></div>
           <div class="form-group"><label>Check-out Date</label><input type="date" id="f_hCheckout"/></div>
         </div>
         <div class="form-row full"><div class="form-group"><label>Hotel Preferences</label><input type="text" id="f_hPref" placeholder="e.g., near office, budget range, amenities"/></div></div>
@@ -689,6 +703,31 @@
       </div>
 
       <input type="hidden" id="f_editId" value=""/>
+
+      <!-- ── Policy Notice (shown dynamically) ── -->
+      <div id="policyNoticeBox" style="display:none;"></div>
+
+      <!-- ── Exception Case (shown when policy violated) ── -->
+      <div id="exceptionBox" class="exception-box" style="display:none;">
+        <div class="exception-title">⚠️ Exception Request — Prior Notice Policy Violated</div>
+        <p style="font-size:12px;color:#744210;margin-bottom:12px;">
+          Your booking date is within the minimum notice period. To proceed, provide a justification and upload the <strong>Functional Head approval email (PDF/Image)</strong>.
+        </p>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-size:12px;font-weight:700;color:#c05621;">Exception Justification *</label>
+          <textarea id="exceptionReason" placeholder="Explain why this is an urgent/exception booking..."
+            style="width:100%;padding:10px 12px;border:1.5px solid #ed8936;border-radius:8px;font-size:12px;resize:vertical;min-height:60px;outline:none;font-family:inherit;background:#fffbf5;"></textarea>
+        </div>
+        <div class="form-group">
+          <label style="font-size:12px;font-weight:700;color:#c05621;">FH Approval Document * (PDF/Image)</label>
+          <div class="file-upload-wrap" id="fileUploadWrap" onclick="document.getElementById('fhApprovalFile').click()">
+            <input type="file" id="fhApprovalFile" accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileUpload(this)"/>
+            <div class="file-upload-label" id="fileUploadLabel">
+              📎 Click to upload FH Approval Email (PDF/JPG/PNG)
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- ── Employee Declaration ── -->
       <div class="declaration-box">
@@ -1325,6 +1364,7 @@ function renderTravelDesk(c) {
 // ═══ REQUEST CARD ═══
 function reqCard(r, vr) {
   const border = {PENDING_MANAGER:'#f6ad55',PENDING_FUNCTION_HEAD:'#63b3ed',PENDING_TRAVEL_DESK:'#b794f4',PROCESSED:'#68d391',REJECTED:'#fc8181',CANCELLED:'#cbd5e0'}[r.status]||'#e2e8f0';
+  const exceptionBadge = r.isException ? `<span style="background:#fff3cd;color:#c05621;border:1px solid #f6c90e;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;margin-left:6px;">⚠️ EXCEPTION</span>` : '';
   const actions = cardActions(r,vr);
   const canSelfEdit =
     (vr==='employee'     && r.status==='PENDING_MANAGER') ||
@@ -1343,6 +1383,7 @@ function reqCard(r, vr) {
         <div class="req-id">
           ${r.id} &nbsp;•&nbsp; ${fmtDate(r.createdAt)}
           ${priorityBadge(r.priority||'Normal')}
+          ${exceptionBadge}
         </div>
         <div class="req-title">${r.purpose}</div>
         <div class="req-meta">
@@ -1438,6 +1479,13 @@ function openNewReq() {
   // Reset declaration
   const chk = document.getElementById('declarationCheck');
   if (chk) chk.checked = false;
+  // Reset exception fields
+  const exReason = document.getElementById('exceptionReason'); if(exReason) exReason.value='';
+  const fileInput = document.getElementById('fhApprovalFile'); if(fileInput) fileInput.value='';
+  const fileWrap  = document.getElementById('fileUploadWrap');  if(fileWrap)  fileWrap.classList.remove('file-selected');
+  const fileLabel = document.getElementById('fileUploadLabel'); if(fileLabel) fileLabel.innerHTML='📎 Click to upload FH Approval Email (PDF/JPG/PNG)';
+  const pNotice   = document.getElementById('policyNoticeBox');  if(pNotice)  pNotice.style.display='none';
+  const exBox     = document.getElementById('exceptionBox');     if(exBox)    exBox.style.display='none';
   const btn = document.getElementById('formSubmitBtn');
   if (btn) { btn.disabled=true; btn.style.opacity='0.5'; btn.style.cursor='not-allowed'; }
   const dn = document.getElementById('declarationName');
@@ -1492,6 +1540,65 @@ function openEditReq(reqId) {
 }
 
 function closeNewReq() { document.getElementById('newReqOverlay').classList.remove('open'); }
+
+// ═══ BOOKING POLICY CHECK ═══
+function checkBookingPolicy() {
+  const today    = new Date(); today.setHours(0,0,0,0);
+  const tDateVal = document.getElementById('f_travelDate')?.value;
+  const hCiVal   = document.getElementById('f_hCheckin')?.value;
+  const hasTransport = selTypes.some(t=>['flight','train','bus'].includes(t));
+  const hasHotel     = selTypes.includes('hotel');
+
+  let violations = [];
+
+  if (hasTransport && tDateVal) {
+    const tDate = new Date(tDateVal); tDate.setHours(0,0,0,0);
+    const diffDays = Math.ceil((tDate - today) / (1000*60*60*24));
+    if (diffDays < 7) violations.push(`✈️ Ticket booking requires <strong>7 days</strong> prior notice. You have <strong>${diffDays} day(s)</strong>.`);
+  }
+  if (hasHotel && hCiVal) {
+    const ciDate = new Date(hCiVal); ciDate.setHours(0,0,0,0);
+    const diffDays = Math.ceil((ciDate - today) / (1000*60*60*24));
+    if (diffDays < 3) violations.push(`🏨 Hotel booking requires <strong>3 days</strong> prior notice. You have <strong>${diffDays} day(s)</strong>.`);
+  }
+
+  const noticeBox   = document.getElementById('policyNoticeBox');
+  const exceptionBox = document.getElementById('exceptionBox');
+  if (!noticeBox || !exceptionBox) return;
+
+  if (violations.length > 0) {
+    noticeBox.style.display  = 'block';
+    exceptionBox.style.display = 'block';
+    noticeBox.className = 'policy-notice error';
+    noticeBox.innerHTML = `<strong>⚠️ Prior Notice Policy Violated:</strong><br>${violations.join('<br>')}`;
+  } else if ((hasTransport && tDateVal) || (hasHotel && hCiVal)) {
+    noticeBox.style.display  = 'block';
+    exceptionBox.style.display = 'none';
+    noticeBox.className = 'policy-notice ok';
+    noticeBox.innerHTML = `<strong>✅ Booking dates comply with prior notice policy.</strong>`;
+  } else {
+    noticeBox.style.display  = 'none';
+    exceptionBox.style.display = 'none';
+  }
+}
+
+function handleFileUpload(input) {
+  const wrap  = document.getElementById('fileUploadWrap');
+  const label = document.getElementById('fileUploadLabel');
+  if (input.files && input.files[0]) {
+    const f = input.files[0];
+    wrap.classList.add('file-selected');
+    label.innerHTML = `✅ ${f.name} (${(f.size/1024).toFixed(1)} KB)`;
+  } else {
+    wrap.classList.remove('file-selected');
+    label.innerHTML = '📎 Click to upload FH Approval Email (PDF/JPG/PNG)';
+  }
+}
+
+function isPolicyViolated() {
+  return document.getElementById('exceptionBox')?.style.display !== 'none';
+}
+
 function toggleSubmitBtn() {
   const chk = document.getElementById('declarationCheck');
   const btn = document.getElementById('formSubmitBtn');
@@ -1561,6 +1668,7 @@ function updateFormSections() {
   const retRow = document.getElementById('returnTimeRow');
   if (retRow) retRow.style.display = hasTransport ? '' : 'none';
 
+  checkBookingPolicy();
   // Hotel section: auto-hide if transport is selected WITHOUT hotel
   if (hasTransport && !selTypes.includes('hotel')) {
     const hotelSec = document.getElementById('sec_hotel');
@@ -1574,6 +1682,14 @@ function updateFormSections() {
 function submitRequest(e) {
   e.preventDefault();
   if (selTypes.length===0) { showToast('Please select at least one travel type (Flight / Train / Bus / Hotel).','error'); return; }
+
+  // Exception validation — if policy violated, justification + file required
+  if (isPolicyViolated()) {
+    const reason = document.getElementById('exceptionReason')?.value.trim();
+    const fileInput = document.getElementById('fhApprovalFile');
+    if (!reason) { showToast('❌ Exception justification is required for urgent booking.','error'); return; }
+    if (!fileInput || fileInput.files.length === 0) { showToast('❌ FH Approval document is required for exception booking.','error'); return; }
+  }
 
   // Date order validation
   const tDate = v('f_travelDate'), rDate = v('f_returnDate');
@@ -1657,7 +1773,11 @@ function submitRequest(e) {
     returnDate:v('f_returnDate') || v('f_hCheckout') || '',
     returnTime: selTypes.some(t=>['flight','train','bus'].includes(t)) ? getTimeValue('f_returnTime','f_returnCustomTime') : '',
     notes:v('f_notes'),
-    priority:v('f_priority'), status:initStatus, comments:[],
+    priority:v('f_priority'),
+    isException: isPolicyViolated(),
+    exceptionReason: isPolicyViolated() ? (document.getElementById('exceptionReason')?.value.trim()||'') : '',
+    approvalDoc: isPolicyViolated() ? (document.getElementById('fhApprovalFile')?.files[0]?.name||'') : '',
+    status:initStatus, comments:[],
     history:[{action:'SUBMITTED',by:currentUser.name,role:submitterRoleLabel,date:today(),comment:''}],
     createdAt:new Date().toISOString(),
   };
