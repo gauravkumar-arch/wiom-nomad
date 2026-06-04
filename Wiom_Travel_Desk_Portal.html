@@ -159,7 +159,16 @@
     .cond-section { display:none; background:#f7fafc; border-radius:10px; padding:16px; margin-bottom:12px; border:1px solid #e2e8f0; }
     .cond-section.visible { display:block; }
     .cond-title { font-size:12px; font-weight:700; color:#4a5568; margin-bottom:12px; }
-    .form-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0; }
+    .form-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; padding-top:16px; border-top:1px solid #e2e8f0; }
+    /* ─── DECLARATION BOX ─── */
+    .declaration-box { background:#fffbeb; border:1.5px solid #f6c90e; border-radius:12px; padding:16px 20px; margin-top:16px; }
+    .declaration-title { font-size:13px; font-weight:800; color:#744210; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .declaration-text { font-size:13px; color:#2d3748; margin-bottom:10px; }
+    .declaration-list { padding-left:18px; margin-bottom:14px; }
+    .declaration-list li { font-size:12px; color:#4a5568; line-height:1.8; }
+    .declaration-check { display:flex; align-items:flex-start; gap:10px; cursor:pointer; padding:10px 14px; background:#fff8e1; border-radius:8px; border:1px solid #fbd38d; }
+    .declaration-check input[type=checkbox] { width:16px; height:16px; margin-top:2px; accent-color:#E81B8C; cursor:pointer; flex-shrink:0; }
+    .declaration-check span { font-size:12px; font-weight:700; color:#744210; line-height:1.5; }
 
     /* ─── PRIORITY SELECT STYLE ─── */
     .priority-opts { display:flex; gap:8px; }
@@ -673,9 +682,29 @@
       </div>
 
       <input type="hidden" id="f_editId" value=""/>
+
+      <!-- ── Employee Declaration ── -->
+      <div class="declaration-box">
+        <div class="declaration-title">📜 Employee Declaration</div>
+        <p class="declaration-text">
+          I, <strong id="declarationName">—</strong>, hereby declare that:
+        </p>
+        <ul class="declaration-list">
+          <li>The travel details provided above are <strong>true and accurate</strong> to the best of my knowledge.</li>
+          <li>This travel is strictly for <strong>official/business purposes</strong> as stated above.</li>
+          <li>I agree to comply with the <strong>Wiom Pravash Travel Policy</strong> including applicable entitlements (class, hotel category, etc.).</li>
+          <li>Any personal travel or deviation from the approved plan will be <strong>borne by me personally</strong>.</li>
+          <li>I understand that <strong>false information</strong> may result in disciplinary action.</li>
+        </ul>
+        <label class="declaration-check">
+          <input type="checkbox" id="declarationCheck" onchange="toggleSubmitBtn()"/>
+          <span>I have read and agree to the above declaration</span>
+        </label>
+      </div>
+
       <div class="form-footer">
         <button type="button" class="btn-secondary" onclick="closeNewReq()">Cancel</button>
-        <button type="submit" class="btn-primary" id="formSubmitBtn">🚀 Submit Request</button>
+        <button type="submit" class="btn-primary" id="formSubmitBtn" disabled style="opacity:0.5;cursor:not-allowed;">🚀 Submit Request</button>
       </div>
     </form>
   </div>
@@ -1331,6 +1360,13 @@ function openNewReq() {
   selectPriority('Normal');
   ['flight','train','bus','hotel'].forEach(t=>{ document.getElementById(`type_${t}`).classList.remove('selected'); document.getElementById(`sec_${t}`).classList.remove('visible'); });
   updateFormSections();
+  // Reset declaration
+  const chk = document.getElementById('declarationCheck');
+  if (chk) chk.checked = false;
+  const btn = document.getElementById('formSubmitBtn');
+  if (btn) { btn.disabled=true; btn.style.opacity='0.5'; btn.style.cursor='not-allowed'; }
+  const dn = document.getElementById('declarationName');
+  if (dn) dn.textContent = currentUser.name;
   document.getElementById('newReqOverlay').classList.add('open');
 }
 
@@ -1381,6 +1417,14 @@ function openEditReq(reqId) {
 }
 
 function closeNewReq() { document.getElementById('newReqOverlay').classList.remove('open'); }
+function toggleSubmitBtn() {
+  const chk = document.getElementById('declarationCheck');
+  const btn = document.getElementById('formSubmitBtn');
+  if (!chk || !btn) return;
+  btn.disabled = !chk.checked;
+  btn.style.opacity = chk.checked ? '1' : '0.5';
+  btn.style.cursor = chk.checked ? 'pointer' : 'not-allowed';
+}
 function handleNewOverlayClick(e) { if(e.target.id==='newReqOverlay') closeNewReq(); }
 
 function toggleType(t) {
