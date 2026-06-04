@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Wiom Nomad — Travel Desk Portal</title>
+  <title>Wiom Pravash — Travel Desk Portal</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -292,6 +292,19 @@
     .login-divider { display:flex; align-items:center; color:rgba(255,255,255,0.3); font-size:11px; margin:10px 0; gap:8px; }
     .login-divider::before, .login-divider::after { content:''; flex:1; height:1px; background:rgba(232,27,140,0.2); }
     .login-footer-note { color:rgba(255,255,255,0.2); font-size:11px; margin-top:30px; position:relative; z-index:1; letter-spacing:0.3px; }
+    /* ─── OTP LOGIN ─── */
+    .otp-box { background:rgba(255,255,255,0.06); border:1px solid rgba(232,27,140,0.25); border-radius:22px; padding:32px 36px; max-width:420px; width:100%; text-align:center; position:relative; z-index:1; backdrop-filter:blur(8px); }
+    .otp-icon { font-size:40px; margin-bottom:12px; }
+    .otp-title { color:#fff; font-size:20px; font-weight:800; margin-bottom:6px; }
+    .otp-sub { color:rgba(255,255,255,0.5); font-size:13px; margin-bottom:20px; line-height:1.5; }
+    .otp-input-wrap { margin-bottom:6px; }
+    .otp-email-input { width:100%; padding:13px 16px; border-radius:12px; border:1.5px solid rgba(232,27,140,0.35); background:rgba(0,0,0,0.35); color:#e2e8f0; font-size:14px; outline:none; text-align:center; letter-spacing:0.3px; transition:border-color 0.2s; }
+    .otp-email-input:focus { border-color:#E81B8C; background:rgba(0,0,0,0.5); }
+    .otp-hint { color:rgba(255,255,255,0.3); font-size:11px; margin-top:12px; }
+    .otp-digits-wrap { display:flex; gap:10px; justify-content:center; margin:16px 0 8px; }
+    .otp-digit { width:46px; height:54px; border-radius:12px; border:2px solid rgba(232,27,140,0.3); background:rgba(0,0,0,0.35); color:#fff; font-size:22px; font-weight:800; text-align:center; outline:none; transition:all 0.2s; }
+    .otp-digit:focus { border-color:#E81B8C; background:rgba(232,27,140,0.1); box-shadow:0 0 0 3px rgba(232,27,140,0.2); }
+    .otp-digit.filled { border-color:#E81B8C; background:rgba(232,27,140,0.12); }
 
     /* ─── FAQ ─── */
     .faq-wrap { margin-bottom:24px; }
@@ -433,7 +446,7 @@
 <nav class="navbar" style="display:none">
   <div class="brand">
     <div class="logo"><img src="wiom-logo.webp" alt="Wiom" style="width:38px;height:38px;object-fit:cover;border-radius:10px;"/></div>
-    <div><h1>Wiom Nomad</h1><span>Travel Desk — Omnia Information Pvt. Ltd.</span></div>
+    <div><h1>Wiom Pravash</h1><span>Travel Desk — Omnia Information Pvt. Ltd.</span></div>
   </div>
   <div class="nav-right">
     <button class="btn-reset" onclick="resetDemo()">↺ Reset</button>
@@ -448,21 +461,18 @@
 
 <!-- ══════════════ LOGIN SCREEN ══════════════ -->
 <div class="login-screen" id="loginScreen">
-  <!-- Animated background orbs -->
   <div class="login-orb orb-1"></div>
   <div class="login-orb orb-2"></div>
   <div class="login-orb orb-3"></div>
 
-  <!-- Brand header -->
   <div class="login-logo">
     <div class="logo-box"><img src="wiom-logo.webp" alt="Wiom" style="width:100%;height:100%;object-fit:cover;"/></div>
     <div>
-      <h1>Wiom Nomad</h1>
+      <h1>Wiom Pravash</h1>
       <p>Travel Desk — Omnia Information Pvt. Ltd.</p>
     </div>
   </div>
 
-  <!-- Tagline pills -->
   <div class="login-tagline">
     <span class="login-tagline-pill">✈️ Flight</span>
     <span class="login-tagline-pill">🚂 Train</span>
@@ -472,30 +482,43 @@
     <span style="color:rgba(255,255,255,0.5);font-style:italic;">Work hard. Roam free.</span>
   </div>
 
-  <!-- Login cards -->
-  <div class="login-cards">
-    <div class="login-card">
-      <span class="lc-icon">👤</span>
-      <h3>Employee / Manager</h3>
-      <p>Submit travel requests, track approvals, and manage your bookings with ease</p>
-      <select class="lc-select" id="userLoginSelect"></select>
-      <button class="btn-login btn-login-user" onclick="loginAsUser()">Login →</button>
+  <!-- ── STEP 1: Email Entry ── -->
+  <div id="otpStep1" class="otp-box">
+    <div class="otp-icon">✉️</div>
+    <h2 class="otp-title">Sign In with Email OTP</h2>
+    <p class="otp-sub">Enter your registered work email to receive a one-time password</p>
+    <div class="otp-input-wrap">
+      <input type="email" id="otpEmail" class="otp-email-input" placeholder="yourname@wiom.in" autocomplete="off"/>
     </div>
-    <div class="login-card">
-      <span class="lc-icon">🎫</span>
-      <h3>Admin — Travel Desk</h3>
-      <p>Process approved bookings, manage all travel requests across the organization</p>
-      <div class="login-divider">Travel Desk Access</div>
-      <div style="background:rgba(0,0,0,0.25);border-radius:10px;padding:12px;margin-bottom:14px;text-align:left;border:1px solid rgba(255,255,255,0.06);">
-        <p style="color:#a0aec0;font-size:11px;margin-bottom:3px;">Logged in as</p>
-        <p style="color:#fff;font-size:14px;font-weight:700;">Gaurav Kumar</p>
-        <p style="color:#718096;font-size:11px;">gaurav.kumar@wiom.in</p>
-      </div>
-      <button class="btn-login btn-login-admin" onclick="loginAsAdmin()">Login as Admin →</button>
-    </div>
+    <button class="btn-login btn-login-user" onclick="sendOTP()" style="max-width:320px;margin-top:6px;">
+      📨 Send OTP
+    </button>
+    <p class="otp-hint">OTP will be sent to your registered email ID</p>
   </div>
 
-  <!-- Footer note -->
+  <!-- ── STEP 2: OTP Verify ── -->
+  <div id="otpStep2" class="otp-box" style="display:none;">
+    <div class="otp-icon">🔐</div>
+    <h2 class="otp-title">Enter OTP</h2>
+    <p class="otp-sub" id="otpSentTo">OTP sent to <strong>—</strong></p>
+    <div class="otp-digits-wrap">
+      <input type="text" maxlength="1" class="otp-digit" id="od1" oninput="otpDigitInput(this,1)" onkeydown="otpDigitKey(this,1)"/>
+      <input type="text" maxlength="1" class="otp-digit" id="od2" oninput="otpDigitInput(this,2)" onkeydown="otpDigitKey(this,2)"/>
+      <input type="text" maxlength="1" class="otp-digit" id="od3" oninput="otpDigitInput(this,3)" onkeydown="otpDigitKey(this,3)"/>
+      <input type="text" maxlength="1" class="otp-digit" id="od4" oninput="otpDigitInput(this,4)" onkeydown="otpDigitKey(this,4)"/>
+      <input type="text" maxlength="1" class="otp-digit" id="od5" oninput="otpDigitInput(this,5)" onkeydown="otpDigitKey(this,5)"/>
+      <input type="text" maxlength="1" class="otp-digit" id="od6" oninput="otpDigitInput(this,6)" onkeydown="otpDigitKey(this,6)"/>
+    </div>
+    <button class="btn-login btn-login-user" onclick="verifyOTP()" style="max-width:320px;margin-top:16px;">
+      ✅ Verify & Login
+    </button>
+    <div style="margin-top:10px;display:flex;gap:16px;justify-content:center;">
+      <button onclick="goBackEmail()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:13px;cursor:pointer;">← Change Email</button>
+      <button onclick="resendOTP()" style="background:none;border:none;color:#E81B8C;font-size:13px;cursor:pointer;font-weight:600;" id="resendBtn">↺ Resend OTP</button>
+    </div>
+    <p id="otpTimer" style="color:rgba(255,255,255,0.35);font-size:12px;margin-top:8px;">OTP expires in <span id="otpTimerVal">10:00</span></p>
+  </div>
+
   <p class="login-footer-note">🔒 Secure internal portal &nbsp;•&nbsp; Omnia Information Pvt. Ltd. &nbsp;•&nbsp; v2.0</p>
 </div>
 
@@ -699,7 +722,7 @@
   </div>
 </div>
 
-<div class="footer" style="display:none">Wiom Nomad &nbsp;|&nbsp; Omnia Information Pvt. Ltd. &nbsp;|&nbsp; v2.0</div>
+<div class="footer" style="display:none">Wiom Pravash &nbsp;|&nbsp; Omnia Information Pvt. Ltd. &nbsp;|&nbsp; v2.0</div>
 
 <!-- ══════════════ MYBIZ EMAIL MODAL ══════════════ -->
 <div class="modal-overlay" id="mybizEmailOverlay" onclick="handleMybizOverlayClick(event)">
@@ -718,7 +741,7 @@
 <!-- ══════════════ CHATBOT ══════════════ -->
 <div class="chat-bubble" id="chatBubble" style="display:none">
   <!-- Floating Button -->
-  <button class="chat-fab" id="chatFab" onclick="toggleChat()" title="Nomad Assistant">
+  <button class="chat-fab" id="chatFab" onclick="toggleChat()" title="Pravash Assistant">
     <span id="chatFabIcon">💬</span>
     <span class="chat-fab-unread" id="chatUnread" style="display:none"></span>
   </button>
@@ -729,7 +752,7 @@
     <div class="chat-head">
       <div class="bot-avatar-head">🤖</div>
       <div class="chat-head-info">
-        <h4>Nomad Assistant 🧳</h4>
+        <h4>Pravash Assistant 🧳</h4>
         <p><span class="online-dot"></span> Online &nbsp;•&nbsp; Instant replies</p>
       </div>
       <button class="chat-close-btn" onclick="toggleChat()">✕</button>
@@ -841,6 +864,115 @@ function setMinDate(fromId, toId) {
   }
 }
 
+// ═══ OTP LOGIN SYSTEM ═══
+let _otpCode = '', _otpUser = null, _otpTimer = null;
+
+function sendOTP() {
+  const email = document.getElementById('otpEmail').value.trim().toLowerCase();
+  if (!email) { showToast('Please enter your email address','error'); return; }
+
+  // Find user by email
+  const user = USERS.find(u => u.email.toLowerCase() === email);
+  if (!user) {
+    showToast('❌ Email not registered. Contact Travel Desk.','error');
+    return;
+  }
+
+  // Generate 6-digit OTP
+  _otpCode = String(Math.floor(100000 + Math.random() * 900000));
+  _otpUser = user;
+
+  // Show OTP in a modal (simulated email for demo)
+  // In production: replace with EmailJS or your email service
+  document.getElementById('otpStep1').style.display = 'none';
+  document.getElementById('otpStep2').style.display = 'block';
+  document.getElementById('otpSentTo').innerHTML = `OTP sent to <strong>${email}</strong>`;
+  document.getElementById('od1').focus();
+
+  // Clear digit fields
+  ['od1','od2','od3','od4','od5','od6'].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = ''; el.classList.remove('filled');
+  });
+
+  // Show OTP in toast (for demo — remove in production with real email)
+  showToast(`📨 OTP for ${user.name}: ${_otpCode}`, 'success');
+
+  // Start 10-min countdown
+  startOTPTimer(600);
+}
+
+function startOTPTimer(seconds) {
+  clearInterval(_otpTimer);
+  const timerEl = document.getElementById('otpTimerVal');
+  _otpTimer = setInterval(() => {
+    const m = Math.floor(seconds/60), s = seconds%60;
+    if(timerEl) timerEl.textContent = `${m}:${s<10?'0'+s:s}`;
+    seconds--;
+    if (seconds < 0) {
+      clearInterval(_otpTimer);
+      _otpCode = '';
+      showToast('⏰ OTP expired. Please resend.','error');
+    }
+  }, 1000);
+}
+
+function otpDigitInput(el, idx) {
+  el.value = el.value.replace(/[^0-9]/g,'');
+  if (el.value) {
+    el.classList.add('filled');
+    if (idx < 6) document.getElementById('od'+(idx+1)).focus();
+    else verifyOTP();
+  } else { el.classList.remove('filled'); }
+}
+
+function otpDigitKey(el, idx) {
+  if (event.key === 'Backspace' && !el.value && idx > 1) {
+    const prev = document.getElementById('od'+(idx-1));
+    prev.value=''; prev.classList.remove('filled'); prev.focus();
+  }
+}
+
+function verifyOTP() {
+  const entered = ['od1','od2','od3','od4','od5','od6'].map(id=>document.getElementById(id).value).join('');
+  if (entered.length < 6) { showToast('Please enter all 6 digits','error'); return; }
+  if (!_otpCode) { showToast('OTP expired. Please resend.','error'); return; }
+  if (entered !== _otpCode) {
+    showToast('❌ Incorrect OTP. Try again.','error');
+    ['od1','od2','od3','od4','od5','od6'].forEach(id=>{
+      const el=document.getElementById(id); el.value=''; el.classList.remove('filled');
+    });
+    document.getElementById('od1').focus();
+    return;
+  }
+  // OTP correct — login
+  clearInterval(_otpTimer);
+  _otpCode = '';
+  currentUser = _otpUser;
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.querySelector('.navbar').style.display='flex';
+  document.getElementById('mainContainer').style.display='block';
+  document.querySelector('.footer').style.display='block';
+  render(); showChatBubble();
+  showToast(`✅ Welcome, ${currentUser.name}!`,'success');
+}
+
+function resendOTP() {
+  if (!_otpUser) return;
+  document.getElementById('otpEmail').value = _otpUser.email;
+  document.getElementById('otpStep2').style.display='none';
+  document.getElementById('otpStep1').style.display='block';
+  sendOTP();
+}
+
+function goBackEmail() {
+  clearInterval(_otpTimer);
+  _otpCode=''; _otpUser=null;
+  document.getElementById('otpStep2').style.display='none';
+  document.getElementById('otpStep1').style.display='block';
+  document.getElementById('otpEmail').value='';
+}
+
 // ── Toast notification (replaces alert) ──
 function showToast(msg, type='success') {
   const old = document.getElementById('toastMsg');
@@ -855,6 +987,10 @@ function showToast(msg, type='success') {
 
 function logout() {
   secTab='pending';
+  clearInterval(_otpTimer); _otpCode=''; _otpUser=null;
+  document.getElementById('otpStep1').style.display='block';
+  document.getElementById('otpStep2').style.display='none';
+  document.getElementById('otpEmail').value='';
   chatGreeted = false; chatOpen = false; chatHistory = [];
   document.getElementById('loginScreen').classList.remove('hidden');
   document.querySelector('.navbar').style.display='none';
@@ -1517,7 +1653,7 @@ function showMyBizEmail(req){
           Post-booking confirmation will be shared with the Travel Desk automatically.
         </div>
         <a class="btn-mybiz-book" href="https://mybiz.makemytrip.com" target="_blank">🎫 Book on MyBiz Now →</a>
-        <p class="mybiz-footer-note">Wiom Nomad &nbsp;•&nbsp; Omnia Information Pvt. Ltd. &nbsp;•&nbsp; This is an automated notification</p>
+        <p class="mybiz-footer-note">Wiom Pravash &nbsp;•&nbsp; Omnia Information Pvt. Ltd. &nbsp;•&nbsp; This is an automated notification</p>
       </div>
     </div>`;
 
@@ -1568,7 +1704,7 @@ function showTravelDeskNotif(req){
           <tr><td>✅ Approved By</td><td>Function Head</td></tr>
         </table>
         <div class="mybiz-note">⚠️ <strong>Action Required:</strong> Please book the tickets via MyBiz and update the booking reference in the portal.</div>
-        <p class="mybiz-footer-note">Wiom Nomad • Omnia Information Pvt. Ltd. • Automated notification</p>
+        <p class="mybiz-footer-note">Wiom Pravash • Omnia Information Pvt. Ltd. • Automated notification</p>
       </div>
     </div>`;
   document.getElementById('mybizEmailOverlay').classList.add('open');
@@ -1617,7 +1753,7 @@ function showBookingConfirmEmail(req){
           <tr><td>✅ Processed By</td><td>Travel Desk (Gaurav Kumar)</td></tr>
         </table>
         <div class="mybiz-note">📌 <strong>Important:</strong> Please carry a printout of this confirmation. Contact Travel Desk for any changes.</div>
-        <p class="mybiz-footer-note">Wiom Nomad • Omnia Information Pvt. Ltd. • Automated notification</p>
+        <p class="mybiz-footer-note">Wiom Pravash • Omnia Information Pvt. Ltd. • Automated notification</p>
       </div>
     </div>`;
   document.getElementById('mybizEmailOverlay').classList.add('open');
@@ -1783,7 +1919,7 @@ function histColor(a){if(a.includes('SUBMITTED'))return'#3182ce';if(a.includes('
 // ═══ FAQ ═══
 const FAQ_DATA = [
   {
-    id:'portal', icon:'🏢', title:'Wiom Nomad — How It Works', color:'#E81B8C',
+    id:'portal', icon:'🏢', title:'Wiom Pravash — How It Works', color:'#E81B8C',
     faqs:[
       { q:'How do I submit a travel request?', a:'Login → select your role → click "✈️ New Travel Request" → fill in traveler info, travel type (Flight/Train/Bus/Hotel), dates, route, and priority → click "Submit Request". Your Manager will be notified automatically.' },
       { q:'What is the approval workflow?', a:'Requests go through 4 stages: <br><b>1. Employee</b> submits → <b>2. Manager</b> approves → <b>3. Function Head</b> approves → <b>4. Travel Desk</b> processes & books. You receive notifications at each stage.' },
@@ -1883,7 +2019,7 @@ const FAQ_DATA = [
       { q:'Is support available 24/7?', a:'Yes! The dedicated MyBiz corporate support team is available <b>24 hours, 7 days a week</b> — including public holidays.' },
       { q:'How fast will I get a response?', a:'📞 Phone: Immediate | 💬 Live Chat: Instant | 📧 Email: Within 2 hours — all response times are guaranteed.' },
       { q:'What if I face a technical issue on MyBiz?', a:'Contact the support team immediately via any channel. Technical issues are resolved within <b>2 hours</b> or an alternative solution is provided.' },
-      { q:'Who do I contact for Wiom Nomad travel requests?', a:'For Wiom Nomad (this portal), contact Travel Desk: <b>Gaurav Kumar</b> at gaurav.kumar@wiom.in. For MyBiz platform issues, use 1800-102-1234.' },
+      { q:'Who do I contact for Wiom Pravash travel requests?', a:'For Wiom Pravash (this portal), contact Travel Desk: <b>Gaurav Kumar</b> at gaurav.kumar@wiom.in. For MyBiz platform issues, use 1800-102-1234.' },
       { q:'Is there a help section inside the MyBiz app?', a:'Yes! MyBiz has a comprehensive Help section with video tutorials, step-by-step guides, and FAQs available both in the app and on the website.' },
     ]
   },
@@ -2229,7 +2365,7 @@ function botReply(htmlContent, delay = 900) {
 // ── Welcome greeting ──
 function botGreet() {
   const name = currentUser ? currentUser.name.split(' ')[0] : 'there';
-  botReply(`👋 <b>Hello ${name}!</b> Main hoon aapka <b>Nomad Assistant</b>.<br><br>
+  botReply(`👋 <b>Hello ${name}!</b> Main hoon aapka <b>Pravash Assistant</b>.<br><br>
     Main help kar sakta hoon:<br>
     📜 <b>Travel Policy</b> — hotel limits, class entitlements<br>
     ❓ <b>FAQ</b> — booking, cancellation, cashback, support<br><br>
@@ -2312,7 +2448,7 @@ const POLICY_ANSWERS = {
     📱 Toll-Free: <b>1800-102-1234</b><br>
     💬 Live Chat: mybiz.makemytrip.com<br>
     📧 corporate@makemytrip.com<br><br>
-    <b>Wiom Nomad Travel Desk:</b><br>
+    <b>Wiom Pravash Travel Desk:</b><br>
     📧 gaurav.kumar@wiom.in<br>
     ⏰ Support available 24×7`
   }
@@ -2456,3 +2592,4 @@ init();
 </script>
 </body>
 </html>
+
