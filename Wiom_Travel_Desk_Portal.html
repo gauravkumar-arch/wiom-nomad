@@ -1251,7 +1251,7 @@ function reqCard(r, vr) {
         </div>
       </div>
       <div class="req-actions" onclick="event.stopPropagation()">
-        ${statusBadge(r.status)}
+        ${(vr==='employee'||vr==='manager_self'||vr==='fh_self') ? statusBadge(r.status) : ''}
         ${actions}
       </div>
     </div>
