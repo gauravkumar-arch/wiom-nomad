@@ -64,8 +64,8 @@
 
     /* ─── STAT CARDS ─── */
     .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
-    .stat-card { background:#fff; border-radius:12px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); display:flex; align-items:center; gap:14px; transition:transform 0.2s; }
-    .stat-card:hover { transform:translateY(-2px); }
+    .stat-card { background:#fff; border-radius:12px; padding:18px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); display:flex; align-items:center; gap:14px; transition:all 0.2s; }
+    .stat-card:hover { transform:translateY(-3px); box-shadow:0 6px 18px rgba(232,27,140,0.15); border:1.5px solid rgba(232,27,140,0.2); }
     .stat-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; }
     .stat-card h3 { font-size:26px; font-weight:800; color:#1a1a2e; }
     .stat-card p { font-size:12px; color:#718096; margin-top:2px; }
@@ -1099,10 +1099,10 @@ function renderEmployee(c) {
       <button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>
     </div>
     <div class="stats-row">
-      <div class="stat-card"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${mine.length}</h3><p>Total Requests</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${inProg}</h3><p>In Progress</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>r.status==='PROCESSED').length}</h3><p>Processed</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>['REJECTED','CANCELLED'].includes(r.status)).length}</h3><p>Rejected/Cancelled</p></div></div>
+      <div class="stat-card" onclick="setTab('all')" style="cursor:pointer"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${mine.length}</h3><p>Total Requests</p></div></div>
+      <div class="stat-card" onclick="setTab('pending')" style="cursor:pointer"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${inProg}</h3><p>In Progress</p></div></div>
+      <div class="stat-card" onclick="setTab('done')" style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>r.status==='PROCESSED').length}</h3><p>Processed</p></div></div>
+      <div class="stat-card" onclick="setTab('done')" style="cursor:pointer"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>['REJECTED','CANCELLED'].includes(r.status)).length}</h3><p>Rejected/Cancelled</p></div></div>
     </div>
     <div class="section-tabs">
       <button class="sec-tab ${secTab==='all'?'active':''}" onclick="setTab('all')">📋 All (${mine.length})</button>
@@ -1131,10 +1131,10 @@ function renderManager(c) {
       <button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>
     </div>
     <div class="stats-row">
-      <div class="stat-card"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${pend.length}</h3><p>Pending Approval</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>r.status!=='PENDING_MANAGER'&&r.status!=='REJECTED'&&r.status!=='CANCELLED').length}</h3><p>Team Approved</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${myReqs.length}</h3><p>My Requests</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>r.status==='REJECTED').length}</h3><p>Rejected</p></div></div>
+      <div class="stat-card" onclick="setTab('pending')" style="cursor:pointer"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${pend.length}</h3><p>Pending Approval</p></div></div>
+      <div class="stat-card" onclick="setTab('all')" style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>r.status!=='PENDING_MANAGER'&&r.status!=='REJECTED'&&r.status!=='CANCELLED').length}</h3><p>Team Approved</p></div></div>
+      <div class="stat-card" onclick="setTab('myreqs')" style="cursor:pointer"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${myReqs.length}</h3><p>My Requests</p></div></div>
+      <div class="stat-card" onclick="setTab('all')" style="cursor:pointer"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>r.status==='REJECTED').length}</h3><p>Rejected</p></div></div>
     </div>
     <div class="section-tabs">
       <button class="sec-tab ${secTab==='pending'?'active':''}" onclick="setTab('pending')">⏳ Team Pending <span class="tab-count">${pend.length}</span></button>
@@ -1162,10 +1162,10 @@ function renderFunctionHead(c) {
       <button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>
     </div>
     <div class="stats-row">
-      <div class="stat-card"><div class="stat-icon" style="background:#f0e6ff">⏳</div><div><h3>${pend.length}</h3><p>Awaiting Approval</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>['PENDING_TRAVEL_DESK','PROCESSED'].includes(r.status)).length}</h3><p>Team Approved</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${myReqs.length}</h3><p>My Requests</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>r.status==='REJECTED').length}</h3><p>Rejected</p></div></div>
+      <div class="stat-card" onclick="setTab('pending')" style="cursor:pointer"><div class="stat-icon" style="background:#f0e6ff">⏳</div><div><h3>${pend.length}</h3><p>Awaiting Approval</p></div></div>
+      <div class="stat-card" onclick="setTab('all')" style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${mine.filter(r=>['PENDING_TRAVEL_DESK','PROCESSED'].includes(r.status)).length}</h3><p>Team Approved</p></div></div>
+      <div class="stat-card" onclick="setTab('myreqs')" style="cursor:pointer"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${myReqs.length}</h3><p>My Requests</p></div></div>
+      <div class="stat-card" onclick="setTab('all')" style="cursor:pointer"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${mine.filter(r=>r.status==='REJECTED').length}</h3><p>Rejected</p></div></div>
     </div>
     <div class="section-tabs">
       <button class="sec-tab ${secTab==='pending'?'active':''}" onclick="setTab('pending')">⏳ Team Pending <span class="tab-count">${pend.length}</span></button>
@@ -1196,10 +1196,10 @@ function renderTravelDesk(c) {
       </div>
     </div>
     <div class="stats-row">
-      <div class="stat-card"><div class="stat-icon" style="background:#f0e6ff">🎫</div><div><h3>${pend.length}</h3><p>Pending Booking</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${proc.length}</h3><p>Processed</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${inApp}</h3><p>In Approval</p></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${requests.length}</h3><p>Total</p></div></div>
+      <div class="stat-card" onclick="setTab('pending')" style="cursor:pointer"><div class="stat-icon" style="background:#f0e6ff">🎫</div><div><h3>${pend.length}</h3><p>Pending Booking</p></div></div>
+      <div class="stat-card" onclick="setTab('processed')" style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${proc.length}</h3><p>Processed</p></div></div>
+      <div class="stat-card" onclick="setTab('all')" style="cursor:pointer"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${inApp}</h3><p>In Approval</p></div></div>
+      <div class="stat-card" onclick="setTab('all')" style="cursor:pointer"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${requests.length}</h3><p>Total</p></div></div>
     </div>
     <div class="section-tabs">
       <button class="sec-tab ${secTab==='pending'?'active':''}" onclick="setTab('pending')">🎫 Pending <span class="tab-count">${pend.length}</span></button>
