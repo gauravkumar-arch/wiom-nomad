@@ -1417,7 +1417,8 @@ function confirmApprove(){
     req.history.push({action:'APPROVED BY FUNCTION HEAD',by:currentUser.name,role:'Function Head',date:today(),comment});
     const snapReq = JSON.parse(JSON.stringify(req)); // snapshot before render
     save();closeApproveModal();render();
-    showMyBizEmail(snapReq); // trigger email modal
+    showMyBizEmail(snapReq);         // Email 1: Employee → MyBiz booking link
+    showTravelDeskNotif(snapReq);    // Email 2: Travel Desk → please process
   }
 }
 
@@ -1481,6 +1482,103 @@ function showMyBizEmail(req){
 function closeMyBizModal(){ document.getElementById('mybizEmailOverlay').classList.remove('open'); }
 function handleMybizOverlayClick(e){ if(e.target.id==='mybizEmailOverlay') closeMyBizModal(); }
 
+// ═══ TRAVEL DESK NOTIFICATION EMAIL (when FH approves) ═══
+function showTravelDeskNotif(req){
+  const tdUser = USERS.find(u=>u.role==='travel_desk');
+  const tdEmail = tdUser ? tdUser.email : 'gaurav.kumar@wiom.in';
+  const fmtDate = d => { if(!d) return '—'; const dt=new Date(d); return isNaN(dt)?d:dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); };
+  const now = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+  document.getElementById('mybizEmailContent').innerHTML = `
+    <div class="mybiz-sent-banner">
+      <span style="font-size:18px;">📩</span>
+      <div>
+        <div>Email sent to Travel Desk: <strong>${tdEmail}</strong></div>
+        <div style="font-size:11px;font-weight:400;color:#38a169;">Delivered at ${now} — Please process the booking</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#718096;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+      <span>📨 To:</span>
+      <span class="mybiz-to-chip">🎫 ${tdEmail}</span>
+      <span style="color:#a0aec0;">• Subject: <em>New Booking Request Ready — ${req.id}</em></span>
+    </div>
+    <div class="mybiz-email-preview">
+      <div class="mybiz-email-head" style="background:linear-gradient(135deg,#6b46c1,#805ad5);">
+        <div style="font-size:28px;">🎫</div>
+        <h2>New Booking Request Approved!</h2>
+        <p>Please process this travel booking at the earliest</p>
+      </div>
+      <div class="mybiz-email-body">
+        <p style="font-size:13px;color:#2d3748;margin-bottom:4px;">Hi <strong>${tdUser?tdUser.name:'Travel Desk'}</strong>,</p>
+        <p style="font-size:12px;color:#718096;margin-bottom:14px;line-height:1.6;">
+          A travel request <strong style="color:#6b46c1;">${req.id}</strong> has been fully approved and is ready for booking.
+          Please process this at the earliest.
+        </p>
+        <table class="mybiz-meta-table">
+          <tr><td>📋 Request ID</td><td>${req.id}</td></tr>
+          <tr><td>👤 Employee</td><td>${req.employeeName} (${req.dept})</td></tr>
+          <tr><td>🎯 Purpose</td><td>${req.purpose||'—'}</td></tr>
+          <tr><td>📍 Route</td><td>${req.fromCity||'—'} → ${req.toCity||'—'}</td></tr>
+          <tr><td>✈️ Travel Mode</td><td>${req.types?req.types.join(' + '):'—'}</td></tr>
+          <tr><td>📅 Travel Date</td><td>${fmtDate(req.travelDate)}</td></tr>
+          <tr><td>⚡ Priority</td><td>${req.priority||'Normal'}</td></tr>
+          <tr><td>✅ Approved By</td><td>Function Head</td></tr>
+        </table>
+        <div class="mybiz-note">⚠️ <strong>Action Required:</strong> Please book the tickets via MyBiz and update the booking reference in the portal.</div>
+        <p class="mybiz-footer-note">Wiom Nomad • Omnia Information Pvt. Ltd. • Automated notification</p>
+      </div>
+    </div>`;
+  document.getElementById('mybizEmailOverlay').classList.add('open');
+}
+
+// ═══ BOOKING CONFIRMATION EMAIL (when Travel Desk processes) ═══
+function showBookingConfirmEmail(req){
+  const emp = USERS.find(u=>u.id===req.employeeId);
+  const empEmail = emp ? emp.email : req.employeeName.split(' ')[0].toLowerCase()+'@wiom.in';
+  const fmtDate = d => { if(!d) return '—'; const dt=new Date(d); return isNaN(dt)?d:dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); };
+  const now = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+  document.getElementById('mybizEmailContent').innerHTML = `
+    <div class="mybiz-sent-banner">
+      <span style="font-size:18px;">✅</span>
+      <div>
+        <div>Booking confirmation sent to <strong>${empEmail}</strong></div>
+        <div style="font-size:11px;font-weight:400;color:#38a169;">Delivered at ${now} — Booking is confirmed!</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#718096;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+      <span>📨 To:</span>
+      <span class="mybiz-to-chip">✉️ ${empEmail}</span>
+      <span style="color:#a0aec0;">• Subject: <em>Booking Confirmed — ${req.id} | Ref: ${req.bookingRef}</em></span>
+    </div>
+    <div class="mybiz-email-preview">
+      <div class="mybiz-email-head" style="background:linear-gradient(135deg,#276749,#38a169);">
+        <div style="font-size:28px;">🎟️</div>
+        <h2>Your Booking is Confirmed!</h2>
+        <p>Travel Desk ne aapki booking process kar di hai</p>
+      </div>
+      <div class="mybiz-email-body">
+        <p style="font-size:13px;color:#2d3748;margin-bottom:4px;">Hi <strong>${req.employeeName}</strong>,</p>
+        <p style="font-size:12px;color:#718096;margin-bottom:14px;line-height:1.6;">
+          Your travel booking for request <strong style="color:#276749;">${req.id}</strong> has been confirmed by the Travel Desk.
+          Please find your booking details below.
+        </p>
+        <table class="mybiz-meta-table">
+          <tr><td>📋 Request ID</td><td>${req.id}</td></tr>
+          <tr><td>🎯 Purpose</td><td>${req.purpose||'—'}</td></tr>
+          <tr><td>📍 Route</td><td>${req.fromCity||'—'} → ${req.toCity||'—'}</td></tr>
+          <tr><td>✈️ Travel Mode</td><td>${req.types?req.types.join(' + '):'—'}</td></tr>
+          <tr><td>📅 Travel Date</td><td>${fmtDate(req.travelDate)}</td></tr>
+          <tr><td>🔙 Return Date</td><td>${fmtDate(req.returnDate)}</td></tr>
+          <tr><td>🎫 Booking Ref</td><td><strong style="color:#276749;">${req.bookingRef||'N/A'}</strong></td></tr>
+          <tr><td>📝 Notes</td><td>${req.bookingNotes||'—'}</td></tr>
+          <tr><td>✅ Processed By</td><td>Travel Desk (Gaurav Kumar)</td></tr>
+        </table>
+        <div class="mybiz-note">📌 <strong>Important:</strong> Please carry a printout of this confirmation. Contact Travel Desk for any changes.</div>
+        <p class="mybiz-footer-note">Wiom Nomad • Omnia Information Pvt. Ltd. • Automated notification</p>
+      </div>
+    </div>`;
+  document.getElementById('mybizEmailOverlay').classList.add('open');
+}
+
 // ═══ REJECT ═══
 function openRejectModal(reqId,role){pendingAct={type:'reject',reqId,role};document.getElementById('rejectReason').value='';document.getElementById('rejectModal').classList.add('open');}
 function closeRejectModal(){document.getElementById('rejectModal').classList.remove('open');pendingAct=null;}
@@ -1502,7 +1600,9 @@ function confirmProcess(){
   const req=requests.find(r=>r.id===pendingAct.reqId); if(!req)return;
   req.status='PROCESSED'; req.bookingRef=ref||'N/A'; req.bookingNotes=notes;
   req.history.push({action:'PROCESSED BY TRAVEL DESK',by:currentUser.name,role:'Travel Desk',date:today(),comment:`Ref: ${req.bookingRef}. ${notes}`});
+  const snapProc = JSON.parse(JSON.stringify(req));
   save();closeProcessModal();render();
+  showBookingConfirmEmail(snapProc); // Email 3: Employee → booking confirmed
 }
 
 // ═══ DETAIL PANEL ═══
