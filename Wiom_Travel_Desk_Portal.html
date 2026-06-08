@@ -949,10 +949,22 @@ function sendOTP() {
   _otpCode = String(Math.floor(100000 + Math.random() * 900000));
   _otpUser = user;
 
+  // Send OTP via Slack (DM or channel)
+  fetch('/api/slack/send-otp', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ email, otp: _otpCode, name: user.name })
+  }).then(r=>r.json()).then(d=>{
+    if (d.ok) {
+      document.getElementById('otpSentTo').innerHTML =
+        `OTP sent to <strong>${email}</strong> via <strong>Slack ${d.via==='dm'?'DM':'channel'}</strong> 💬`;
+    }
+  }).catch(()=>{});
+
   // Switch to OTP entry screen
   document.getElementById('otpStep1').style.display = 'none';
   document.getElementById('otpStep2').style.display = 'block';
-  document.getElementById('otpSentTo').innerHTML = `OTP sent to <strong>${email}</strong>`;
+  document.getElementById('otpSentTo').innerHTML = `Sending OTP to <strong>${email}</strong> via Slack... 💬`;
 
   // Clear digit fields
   ['od1','od2','od3','od4','od5','od6'].forEach(id => {
@@ -1043,6 +1055,15 @@ function goBackEmail() {
   document.getElementById('otpStep2').style.display='none';
   document.getElementById('otpStep1').style.display='block';
   document.getElementById('otpEmail').value='';
+}
+
+// ═══ SLACK NOTIFICATIONS ═══
+function slackNotify(text) {
+  fetch('/api/slack/notify', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ text })
+  }).catch(()=>{});
 }
 
 // ── Toast notification (replaces alert) ──
@@ -1802,6 +1823,7 @@ function submitRequest(e) {
   requests.push(req);
   save(); closeNewReq(); render();
   showToast(`✅ ${id} submitted! Sent to ${req.manager || 'Function Head'} for approval.`, 'success');
+  slackNotify(`📋 *New Travel Request* — ${id}\n👤 *Employee:* ${req.employeeName} (${req.dept})\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity} → ${req.toCity}\n✈️ *Mode:* ${req.types?.join(' + ')}\n📅 *Date:* ${req.travelDate}\n⚡ *Priority:* ${req.priority||'Normal'}\n⏳ *Status:* Pending approval from ${req.manager||'Function Head'}`);
 }
 
 function cancelRequest(reqId) {
@@ -1845,6 +1867,7 @@ function confirmApprove(){
     req.status='PENDING_FUNCTION_HEAD';
     req.history.push({action:'APPROVED BY MANAGER',by:currentUser.name,role:'Manager',date:today(),comment});
     save();closeApproveModal();render();
+    slackNotify(`✅ *Manager Approved* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n✅ *Approved by:* ${currentUser.name} (Manager)\n📋 *Next:* Pending Function Head approval`);
   } else {
     req.status='PENDING_TRAVEL_DESK';
     req.history.push({action:'APPROVED BY FUNCTION HEAD',by:currentUser.name,role:'Function Head',date:today(),comment});
@@ -1857,6 +1880,7 @@ function confirmApprove(){
     const tdUser = USERS.find(u=>u.role==='travel_desk');
     const tdEmail = tdUser ? tdUser.email : 'gaurav.kumar@wiom.in';
     save();closeApproveModal();render();
+    slackNotify(`✅ *Function Head Approved* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n✅ *Approved by:* ${currentUser.name} (Function Head)\n📋 *Next:* Travel Desk to book tickets\n📧 *MyBiz email sent to:* ${empEmail}`);
     // Toast to Function Head — emails sent silently
     showToast(`✅ Emails sent — ${empEmail} (MyBiz link) & ${tdEmail} (Travel Desk notified)`, 'success');
   }
@@ -2030,6 +2054,7 @@ function confirmReject(){
   req.status='REJECTED';
   req.history.push({action:`REJECTED BY ${lbl}`,by:currentUser.name,role:role==='manager'?'Manager':'Function Head',date:today(),comment:reason});
   save();closeRejectModal();render();
+  slackNotify(`❌ *Request Rejected* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n🚫 *Rejected by:* ${currentUser.name} (${role==='manager'?'Manager':'Function Head'})\n💬 *Reason:* ${reason}`);
 }
 
 // ═══ PROCESS ═══
@@ -2045,6 +2070,7 @@ function confirmProcess(){
   const empUser2 = USERS.find(u=>u.id===req.employeeId);
   const empEmail2 = empUser2 ? empUser2.email : req.employeeName.toLowerCase().replace(' ','')+'@wiom.in';
   save();closeProcessModal();render();
+  slackNotify(`🎫 *Travel Desk Booked* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n📅 *Travel Date:* ${req.travelDate||'—'}\n🔖 *Booking Ref:* ${req.bookingRef}\n✅ *Booked by:* ${currentUser.name} (Travel Desk)\n📧 *Confirmation sent to:* ${empEmail2}`);
   showToast(`✅ Booking confirmed! Confirmation email sent to ${empEmail2}`, 'success');
 }
 
