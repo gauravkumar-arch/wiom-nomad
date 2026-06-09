@@ -7,6 +7,13 @@ const PORT = process.env.PORT || 3000;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 const SLACK_BOT_TOKEN   = process.env.SLACK_BOT_TOKEN   || '';
 
+// ── In-memory notify log (last 20 calls) ──
+const notifyLog = [];
+function logNotify(entry) {
+  notifyLog.unshift({ ...entry, ts: new Date().toISOString() });
+  if (notifyLog.length > 20) notifyLog.pop();
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
@@ -23,17 +30,25 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ── Debug: show last 20 notify calls (what email was requested + result) ──
+app.get('/api/debug/notify-log', (req, res) => {
+  res.json({ count: notifyLog.length, log: notifyLog });
+});
+
 // ── Slack: Send DM notification to a specific user by email ──
 app.post('/api/slack/notify', async (req, res) => {
   const { text, email } = req.body;
-  if (!email) return res.json({ ok: false, error: 'No recipient email provided' });
-  if (!SLACK_BOT_TOKEN) return res.json({ ok: false, error: 'No bot token configured' });
+  if (!email) { logNotify({ email: '(none)', result: 'skipped_no_email' }); return res.json({ ok: false, error: 'No recipient email provided' }); }
+  if (!SLACK_BOT_TOKEN) { logNotify({ email, result: 'no_bot_token' }); return res.json({ ok: false, error: 'No bot token configured' }); }
+
+  logNotify({ email, result: 'attempting', textSnip: (text||'').substring(0,60) });
 
   try {
     // 1. Find Slack user by email
     const userRes = await slackAPI('users.lookupByEmail', { email }, 'GET');
     if (!userRes?.ok || !userRes?.user?.id) {
       console.log(`[notify] users.lookupByEmail failed for ${email}:`, JSON.stringify(userRes));
+      logNotify({ email, result: 'user_not_found', error: userRes?.error });
       return res.json({ ok: false, error: 'user_not_found: ' + (userRes?.error || 'unknown') });
     }
 
@@ -41,6 +56,7 @@ app.post('/api/slack/notify', async (req, res) => {
     const dmRes = await slackAPI('conversations.open', { users: userRes.user.id });
     if (!dmRes?.ok || !dmRes?.channel?.id) {
       console.log(`[notify] conversations.open failed for ${userRes.user.id}:`, JSON.stringify(dmRes));
+      logNotify({ email, result: 'dm_open_failed', error: dmRes?.error });
       return res.json({ ok: false, error: 'dm_open_failed: ' + (dmRes?.error || 'unknown') });
     }
 
@@ -51,13 +67,16 @@ app.post('/api/slack/notify', async (req, res) => {
     });
     if (!msgRes?.ok) {
       console.log(`[notify] chat.postMessage failed:`, JSON.stringify(msgRes));
+      logNotify({ email, result: 'postMessage_failed', error: msgRes?.error });
       return res.json({ ok: false, error: 'postMessage_failed: ' + (msgRes?.error || 'unknown') });
     }
 
     console.log(`[notify] DM sent to ${email}`);
+    logNotify({ email, result: 'dm_sent_ok' });
     res.json({ ok: true, via: 'dm' });
   } catch (e) {
     console.log(`[notify] Exception for ${email}:`, e.message);
+    logNotify({ email, result: 'exception', error: e.message });
     res.json({ ok: false, error: e.message });
   }
 });
