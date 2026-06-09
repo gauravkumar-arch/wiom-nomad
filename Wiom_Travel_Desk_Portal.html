@@ -1046,12 +1046,6 @@ function goBackEmail() {
 // ═══ SLACK NOTIFICATIONS ═══
 // email = recipient's Wiom email — sends DM via bot. If no email, message is skipped (never posts to #general).
 function slackNotify(text, email) {
-  // DEBUG: log every call so we can diagnose missing notifications
-  fetch('/api/debug/client-log', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ from:'slackNotify', email: email||'(empty)', hasEmail: !!email, textSnip: (text||'').substring(0,80) })
-  }).catch(()=>{});
   if (!email) return;
   fetch('/api/slack/notify', {
     method: 'POST',
