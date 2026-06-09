@@ -119,9 +119,7 @@ const RAILWAY_TOKEN       = process.env.RAILWAY_TOKEN       || 'ce425e0c-7d53-45
 const RAILWAY_PROJECT_ID  = process.env.RAILWAY_PROJECT_ID  || '7d29ad6c-9bde-425b-829e-d15676c244d5';
 const RAILWAY_SERVICE_ID  = process.env.RAILWAY_SERVICE_ID  || 'da929c21-0d44-4935-b78e-b07fafe6b647';
 const RAILWAY_ENV_ID      = process.env.RAILWAY_ENV_ID      || 'e89df6e7-40f6-4000-ba03-24922cd91159';
-const APP_URL             = process.env.RAILWAY_PUBLIC_DOMAIN
-  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-  : 'https://wiom-pravash-production.up.railway.app';
+const APP_URL             = 'https://wiom-pravash-production.up.railway.app';
 
 // Step 1 — redirect user to Slack OAuth
 app.get('/slack-setup', (req, res) => {
