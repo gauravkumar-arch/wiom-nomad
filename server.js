@@ -126,7 +126,7 @@ app.post('/api/slack/send-otp', async (req, res) => {
     // 3. Send OTP message
     const msgRes = await slackAPI('chat.postMessage', {
       channel: channelId,
-      text: `🔐 *Wiom Pravash — Login OTP*\n\nHi *${name}*! Your one-time password is:\n\n*${otp}*\n\n_This OTP expires in 10 minutes. Do not share it with anyone._`
+      text: `:lock: *Wiom Pravash — Login OTP*\n\nHi *${name}*! Your one-time password is:\n\n*${otp}*\n\n_This OTP expires in 10 minutes. Do not share it with anyone._`
     });
     if (!msgRes?.ok) {
       console.log(`[OTP] chat.postMessage failed for ${channelId}:`, JSON.stringify(msgRes));

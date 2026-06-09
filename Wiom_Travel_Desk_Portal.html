@@ -1816,7 +1816,7 @@ function submitRequest(e) {
     ? USERS.find(u=>u.name===req.manager && u.role==='manager')
     : USERS.find(u=>u.role==='function_head');
   const _approverEmail = _approverUser ? _approverUser.email : (USERS.find(u=>u.role==='function_head')||{}).email;
-  slackNotify(`📋 *New Travel Request* — ${id}\n👤 *Employee:* ${req.employeeName} (${req.dept})\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity} → ${req.toCity}\n✈️ *Mode:* ${req.types?.join(' + ')}\n📅 *Date:* ${req.travelDate}\n⚡ *Priority:* ${req.priority||'Normal'}\n⏳ *Status:* Pending approval from ${req.manager||'Function Head'}`, _approverEmail);
+  slackNotify(`:clipboard: *New Travel Request* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:airplane: *Mode:* ${req.types?.join(' + ')}\n:calendar: *Date:* ${req.travelDate}\n:zap: *Priority:* ${req.priority||'Normal'}\n:hourglass_flowing_sand: *Pending approval from* ${req.manager||'Function Head'}`, _approverEmail);
 }
 
 function cancelRequest(reqId) {
@@ -1862,7 +1862,7 @@ function confirmApprove(){
     save();closeApproveModal();render();
     // Notify Function Head via DM
     const _fhUser = USERS.find(u=>u.role==='function_head');
-    slackNotify(`✅ *Manager Approved* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n✅ *Approved by:* ${currentUser.name} (Manager)\n📋 *Next:* Pending your approval`, _fhUser ? _fhUser.email : '');
+    slackNotify(`:white_check_mark: *Manager Approved* — ${req.id}\n:bust_in_silhouette: *Employee:* ${req.employeeName}\n:dart: *Purpose:* ${req.purpose}\n:white_check_mark: *Approved by:* ${currentUser.name} (Manager)\n:clipboard: *Next:* Pending your approval`, _fhUser ? _fhUser.email : '');
   } else {
     req.status='PENDING_TRAVEL_DESK';
     req.history.push({action:'APPROVED BY FUNCTION HEAD',by:currentUser.name,role:'Function Head',date:today(),comment});
@@ -1876,7 +1876,7 @@ function confirmApprove(){
     const tdEmail = tdUser ? tdUser.email : 'gaurav.singh@wiom.in';
     save();closeApproveModal();render();
     // Notify Travel Desk via DM
-    slackNotify(`✅ *Function Head Approved* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n✅ *Approved by:* ${currentUser.name} (Function Head)\n📋 *Action Required:* Please book the tickets`, tdEmail);
+    slackNotify(`:white_check_mark: *Function Head Approved* — ${req.id}\n:bust_in_silhouette: *Employee:* ${req.employeeName}\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n:white_check_mark: *Approved by:* ${currentUser.name} (Function Head)\n:ticket: *Action Required:* Please book the tickets`, tdEmail);
     // Toast to Function Head — emails sent silently
     showToast(`✅ Emails sent — ${empEmail} (MyBiz link) & ${tdEmail} (Travel Desk notified)`, 'success');
   }
@@ -2052,7 +2052,7 @@ function confirmReject(){
   save();closeRejectModal();render();
   // Notify employee via DM that their request was rejected
   const _rejEmpUser = USERS.find(u=>u.id===req.employeeId);
-  slackNotify(`❌ *Request Rejected* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n🚫 *Rejected by:* ${currentUser.name} (${role==='manager'?'Manager':'Function Head'})\n💬 *Reason:* ${reason}`, _rejEmpUser ? _rejEmpUser.email : '');
+  slackNotify(`:x: *Request Rejected* — ${req.id}\n:bust_in_silhouette: *Employee:* ${req.employeeName}\n:dart: *Purpose:* ${req.purpose}\n:no_entry_sign: *Rejected by:* ${currentUser.name} (${role==='manager'?'Manager':'Function Head'})\n:speech_balloon: *Reason:* ${reason}`, _rejEmpUser ? _rejEmpUser.email : '');
 }
 
 // ═══ PROCESS ═══
@@ -2069,7 +2069,7 @@ function confirmProcess(){
   const empEmail2 = empUser2 ? empUser2.email : req.employeeName.toLowerCase().replace(' ','')+'@wiom.in';
   save();closeProcessModal();render();
   // Notify employee via DM — booking is done
-  slackNotify(`🎫 *Your Travel is Booked!* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n📅 *Travel Date:* ${req.travelDate||'—'}\n🔖 *Booking Ref:* ${req.bookingRef}\n✅ *Booked by:* ${currentUser.name} (Travel Desk)`, empEmail2);
+  slackNotify(`:ticket: *Your Travel is Booked!* — ${req.id}\n:bust_in_silhouette: *Employee:* ${req.employeeName}\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n:calendar: *Travel Date:* ${req.travelDate||'—'}\n:bookmark: *Booking Ref:* ${req.bookingRef}\n:white_check_mark: *Booked by:* ${currentUser.name} (Travel Desk)`, empEmail2);
   showToast(`✅ Booking confirmed! Confirmation email sent to ${empEmail2}`, 'success');
 }
 
