@@ -1044,11 +1044,13 @@ function goBackEmail() {
 }
 
 // ═══ SLACK NOTIFICATIONS ═══
-function slackNotify(text) {
+// email = recipient's Wiom email — sends DM via bot. If no email, message is skipped (never posts to #general).
+function slackNotify(text, email) {
+  if (!email) return;
   fetch('/api/slack/notify', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ text })
+    body: JSON.stringify({ text, email })
   }).catch(()=>{});
 }
 
@@ -1809,7 +1811,12 @@ function submitRequest(e) {
   requests.push(req);
   save(); closeNewReq(); render();
   showToast(`✅ ${id} submitted! Sent to ${req.manager || 'Function Head'} for approval.`, 'success');
-  slackNotify(`📋 *New Travel Request* — ${id}\n👤 *Employee:* ${req.employeeName} (${req.dept})\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity} → ${req.toCity}\n✈️ *Mode:* ${req.types?.join(' + ')}\n📅 *Date:* ${req.travelDate}\n⚡ *Priority:* ${req.priority||'Normal'}\n⏳ *Status:* Pending approval from ${req.manager||'Function Head'}`);
+  // Notify approver (manager or function head) via DM
+  const _approverUser = req.manager
+    ? USERS.find(u=>u.name===req.manager && u.role==='manager')
+    : USERS.find(u=>u.role==='function_head');
+  const _approverEmail = _approverUser ? _approverUser.email : (USERS.find(u=>u.role==='function_head')||{}).email;
+  slackNotify(`📋 *New Travel Request* — ${id}\n👤 *Employee:* ${req.employeeName} (${req.dept})\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity} → ${req.toCity}\n✈️ *Mode:* ${req.types?.join(' + ')}\n📅 *Date:* ${req.travelDate}\n⚡ *Priority:* ${req.priority||'Normal'}\n⏳ *Status:* Pending approval from ${req.manager||'Function Head'}`, _approverEmail);
 }
 
 function cancelRequest(reqId) {
@@ -1853,7 +1860,9 @@ function confirmApprove(){
     req.status='PENDING_FUNCTION_HEAD';
     req.history.push({action:'APPROVED BY MANAGER',by:currentUser.name,role:'Manager',date:today(),comment});
     save();closeApproveModal();render();
-    slackNotify(`✅ *Manager Approved* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n✅ *Approved by:* ${currentUser.name} (Manager)\n📋 *Next:* Pending Function Head approval`);
+    // Notify Function Head via DM
+    const _fhUser = USERS.find(u=>u.role==='function_head');
+    slackNotify(`✅ *Manager Approved* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n✅ *Approved by:* ${currentUser.name} (Manager)\n📋 *Next:* Pending your approval`, _fhUser ? _fhUser.email : '');
   } else {
     req.status='PENDING_TRAVEL_DESK';
     req.history.push({action:'APPROVED BY FUNCTION HEAD',by:currentUser.name,role:'Function Head',date:today(),comment});
@@ -1866,7 +1875,8 @@ function confirmApprove(){
     const tdUser = USERS.find(u=>u.role==='travel_desk');
     const tdEmail = tdUser ? tdUser.email : 'gaurav.singh@wiom.in';
     save();closeApproveModal();render();
-    slackNotify(`✅ *Function Head Approved* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n✅ *Approved by:* ${currentUser.name} (Function Head)\n📋 *Next:* Travel Desk to book tickets\n📧 *MyBiz email sent to:* ${empEmail}`);
+    // Notify Travel Desk via DM
+    slackNotify(`✅ *Function Head Approved* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n✅ *Approved by:* ${currentUser.name} (Function Head)\n📋 *Action Required:* Please book the tickets`, tdEmail);
     // Toast to Function Head — emails sent silently
     showToast(`✅ Emails sent — ${empEmail} (MyBiz link) & ${tdEmail} (Travel Desk notified)`, 'success');
   }
@@ -2040,7 +2050,9 @@ function confirmReject(){
   req.status='REJECTED';
   req.history.push({action:`REJECTED BY ${lbl}`,by:currentUser.name,role:role==='manager'?'Manager':'Function Head',date:today(),comment:reason});
   save();closeRejectModal();render();
-  slackNotify(`❌ *Request Rejected* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n🚫 *Rejected by:* ${currentUser.name} (${role==='manager'?'Manager':'Function Head'})\n💬 *Reason:* ${reason}`);
+  // Notify employee via DM that their request was rejected
+  const _rejEmpUser = USERS.find(u=>u.id===req.employeeId);
+  slackNotify(`❌ *Request Rejected* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n🚫 *Rejected by:* ${currentUser.name} (${role==='manager'?'Manager':'Function Head'})\n💬 *Reason:* ${reason}`, _rejEmpUser ? _rejEmpUser.email : '');
 }
 
 // ═══ PROCESS ═══
@@ -2056,7 +2068,8 @@ function confirmProcess(){
   const empUser2 = USERS.find(u=>u.id===req.employeeId);
   const empEmail2 = empUser2 ? empUser2.email : req.employeeName.toLowerCase().replace(' ','')+'@wiom.in';
   save();closeProcessModal();render();
-  slackNotify(`🎫 *Travel Desk Booked* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n📅 *Travel Date:* ${req.travelDate||'—'}\n🔖 *Booking Ref:* ${req.bookingRef}\n✅ *Booked by:* ${currentUser.name} (Travel Desk)\n📧 *Confirmation sent to:* ${empEmail2}`);
+  // Notify employee via DM — booking is done
+  slackNotify(`🎫 *Your Travel is Booked!* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n📅 *Travel Date:* ${req.travelDate||'—'}\n🔖 *Booking Ref:* ${req.bookingRef}\n✅ *Booked by:* ${currentUser.name} (Travel Desk)`, empEmail2);
   showToast(`✅ Booking confirmed! Confirmation email sent to ${empEmail2}`, 'success');
 }
 

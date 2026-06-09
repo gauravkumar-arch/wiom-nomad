@@ -23,27 +23,41 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ── Slack: Send channel notification ──
+// ── Slack: Send DM notification to a specific user by email ──
 app.post('/api/slack/notify', async (req, res) => {
-  const { text, blocks } = req.body;
-  if (!SLACK_WEBHOOK_URL) return res.json({ ok: false, error: 'No webhook configured' });
+  const { text, email } = req.body;
+  if (!email) return res.json({ ok: false, error: 'No recipient email provided' });
+  if (!SLACK_BOT_TOKEN) return res.json({ ok: false, error: 'No bot token configured' });
+
   try {
-    const payload = JSON.stringify({ text, blocks });
-    const url = new URL(SLACK_WEBHOOK_URL);
-    const options = {
-      hostname: url.hostname,
-      path: url.pathname,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-    };
-    await new Promise((resolve, reject) => {
-      const req2 = https.request(options, r => { let d=''; r.on('data',c=>d+=c); r.on('end',()=>resolve(d)); });
-      req2.on('error', reject);
-      req2.write(payload);
-      req2.end();
+    // 1. Find Slack user by email
+    const userRes = await slackAPI('users.lookupByEmail', { email }, 'GET');
+    if (!userRes?.ok || !userRes?.user?.id) {
+      console.log(`[notify] users.lookupByEmail failed for ${email}:`, JSON.stringify(userRes));
+      return res.json({ ok: false, error: 'user_not_found: ' + (userRes?.error || 'unknown') });
+    }
+
+    // 2. Open DM channel
+    const dmRes = await slackAPI('conversations.open', { users: userRes.user.id });
+    if (!dmRes?.ok || !dmRes?.channel?.id) {
+      console.log(`[notify] conversations.open failed for ${userRes.user.id}:`, JSON.stringify(dmRes));
+      return res.json({ ok: false, error: 'dm_open_failed: ' + (dmRes?.error || 'unknown') });
+    }
+
+    // 3. Send DM
+    const msgRes = await slackAPI('chat.postMessage', {
+      channel: dmRes.channel.id,
+      text
     });
-    res.json({ ok: true });
+    if (!msgRes?.ok) {
+      console.log(`[notify] chat.postMessage failed:`, JSON.stringify(msgRes));
+      return res.json({ ok: false, error: 'postMessage_failed: ' + (msgRes?.error || 'unknown') });
+    }
+
+    console.log(`[notify] DM sent to ${email}`);
+    res.json({ ok: true, via: 'dm' });
   } catch (e) {
+    console.log(`[notify] Exception for ${email}:`, e.message);
     res.json({ ok: false, error: e.message });
   }
 });
