@@ -62,56 +62,17 @@ app.post('/api/slack/notify', async (req, res) => {
   }
 });
 
-// ── Slack: Send OTP via DM ──
+// ── Slack: Send OTP via DM only (no channel fallback) ──
 app.post('/api/slack/send-otp', async (req, res) => {
   const { email, otp, name } = req.body;
-  if (!SLACK_BOT_TOKEN) {
-    // Fallback: if no bot token, send to channel
-    if (SLACK_WEBHOOK_URL) {
-      const payload = JSON.stringify({
-        text: `🔐 *OTP for ${name}* (${email})\nYour Wiom Pravash login OTP: *${otp}*\n_Expires in 10 minutes_`
-      });
-      const url = new URL(SLACK_WEBHOOK_URL);
-      const options = {
-        hostname: url.hostname, path: url.pathname, method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-      };
-      await new Promise((resolve, reject) => {
-        const r = https.request(options, res2 => { let d=''; res2.on('data',c=>d+=c); res2.on('end',()=>resolve(d)); });
-        r.on('error', reject); r.write(payload); r.end();
-      });
-      return res.json({ ok: true, via: 'channel' });
-    }
-    return res.json({ ok: false, error: 'No Slack config' });
-  }
-
-  // Helper: send OTP to channel as fallback
-  async function sendOTPToChannel(reason) {
-    if (!SLACK_WEBHOOK_URL) return { ok: false, error: reason + ' | no webhook fallback' };
-    try {
-      const payload = JSON.stringify({
-        text: `🔐 *OTP for ${name}* (${email})\nYour Wiom Pravash login OTP: *${otp}*\n_Expires in 10 minutes_`
-      });
-      const url = new URL(SLACK_WEBHOOK_URL);
-      await new Promise((resolve, reject) => {
-        const r = https.request({
-          hostname: url.hostname, path: url.pathname, method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-        }, res2 => { let d=''; res2.on('data',c=>d+=c); res2.on('end',()=>resolve(d)); });
-        r.on('error', reject); r.write(payload); r.end();
-      });
-      return { ok: true, via: 'channel', reason };
-    } catch(e2) {
-      return { ok: false, error: reason + ' | webhook failed: ' + e2.message };
-    }
-  }
+  if (!SLACK_BOT_TOKEN) return res.json({ ok: false, error: 'No bot token — cannot send OTP' });
 
   try {
     // 1. Find Slack user by email
     const userRes = await slackAPI('users.lookupByEmail', { email }, 'GET');
     if (!userRes?.ok || !userRes?.user?.id) {
       console.log(`[OTP] users.lookupByEmail failed for ${email}:`, JSON.stringify(userRes));
-      return res.json(await sendOTPToChannel('user_not_found_in_slack:' + (userRes?.error || 'unknown')));
+      return res.json({ ok: false, error: 'user_not_found_in_slack: ' + (userRes?.error || 'unknown') });
     }
     const userId = userRes.user.id;
 
@@ -119,25 +80,25 @@ app.post('/api/slack/send-otp', async (req, res) => {
     const dmRes = await slackAPI('conversations.open', { users: userId });
     if (!dmRes?.ok || !dmRes?.channel?.id) {
       console.log(`[OTP] conversations.open failed for ${userId}:`, JSON.stringify(dmRes));
-      return res.json(await sendOTPToChannel('dm_open_failed:' + (dmRes?.error || 'unknown')));
+      return res.json({ ok: false, error: 'dm_open_failed: ' + (dmRes?.error || 'unknown') });
     }
     const channelId = dmRes.channel.id;
 
-    // 3. Send OTP message
+    // 3. Send OTP message via DM only
     const msgRes = await slackAPI('chat.postMessage', {
       channel: channelId,
       text: `:lock: *Wiom Pravash — Login OTP*\n\nHi *${name}*! Your one-time password is:\n\n*${otp}*\n\n_This OTP expires in 10 minutes. Do not share it with anyone._`
     });
     if (!msgRes?.ok) {
       console.log(`[OTP] chat.postMessage failed for ${channelId}:`, JSON.stringify(msgRes));
-      return res.json(await sendOTPToChannel('postMessage_failed:' + (msgRes?.error || 'unknown')));
+      return res.json({ ok: false, error: 'postMessage_failed: ' + (msgRes?.error || 'unknown') });
     }
 
     console.log(`[OTP] DM sent to ${email} (userId=${userId})`);
     res.json({ ok: true, via: 'dm' });
   } catch (e) {
     console.log(`[OTP] Exception for ${email}:`, e.message);
-    res.json(await sendOTPToChannel('exception:' + e.message));
+    res.json({ ok: false, error: 'exception: ' + e.message });
   }
 });
 
