@@ -849,7 +849,7 @@ const USERS = [
   { id:'U012', name:'Pramod',              email:'pramod@wiom.in',               dept:'HR',    role:'employee',      manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'P'  },
   { id:'U013', name:'Devashish Mukherjee', email:'devashish.mukherjee@wiom.in',  dept:'HR',    role:'manager',       functionHead:'Garima Makkar', initials:'DM' },
   { id:'U014', name:'Garima Makkar',       email:'garima.makkar@wiom.in',        dept:'HR',    role:'function_head', initials:'GM' },
-  { id:'U009', name:'Gaurav Kumar',        email:'gaurav.kumar@wiom.in',         dept:'Admin', role:'travel_desk',   initials:'GK' },
+  { id:'U009', name:'Gaurav Singh',        email:'gaurav.singh@wiom.in',         dept:'Admin', role:'travel_desk',   initials:'GS' },
 ];
 
 const ROLE_LABELS = { employee:'👤 Employee', manager:'👔 Manager', function_head:'🏢 Function Head', travel_desk:'🎫 Travel Desk' };
@@ -1864,7 +1864,7 @@ function confirmApprove(){
     const empUser = USERS.find(u=>u.id===req.employeeId);
     const empEmail = empUser ? empUser.email : req.employeeName.toLowerCase().replace(' ','')+'@wiom.in';
     const tdUser = USERS.find(u=>u.role==='travel_desk');
-    const tdEmail = tdUser ? tdUser.email : 'gaurav.kumar@wiom.in';
+    const tdEmail = tdUser ? tdUser.email : 'gaurav.singh@wiom.in';
     save();closeApproveModal();render();
     slackNotify(`✅ *Function Head Approved* — ${req.id}\n👤 *Employee:* ${req.employeeName}\n🎯 *Purpose:* ${req.purpose}\n📍 *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n✅ *Approved by:* ${currentUser.name} (Function Head)\n📋 *Next:* Travel Desk to book tickets\n📧 *MyBiz email sent to:* ${empEmail}`);
     // Toast to Function Head — emails sent silently
@@ -1935,7 +1935,7 @@ function handleMybizOverlayClick(e){ if(e.target.id==='mybizEmailOverlay') close
 // ═══ TRAVEL DESK NOTIFICATION EMAIL (when FH approves) ═══
 function showTravelDeskNotif(req){
   const tdUser = USERS.find(u=>u.role==='travel_desk');
-  const tdEmail = tdUser ? tdUser.email : 'gaurav.kumar@wiom.in';
+  const tdEmail = tdUser ? tdUser.email : 'gaurav.singh@wiom.in';
   const fmtDate = d => { if(!d) return '—'; const dt=new Date(d); return isNaN(dt)?d:dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); };
   const now = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
   document.getElementById('mybizEmailContent').innerHTML = `
@@ -2020,7 +2020,7 @@ function showBookingConfirmEmail(req){
           <tr><td>🔙 Return Date</td><td>${fmtDate(req.returnDate)}</td></tr>
           <tr><td>🎫 Booking Ref</td><td><strong style="color:#276749;">${req.bookingRef||'N/A'}</strong></td></tr>
           <tr><td>📝 Notes</td><td>${req.bookingNotes||'—'}</td></tr>
-          <tr><td>✅ Processed By</td><td>Travel Desk (Gaurav Kumar)</td></tr>
+          <tr><td>✅ Processed By</td><td>Travel Desk (Gaurav Singh)</td></tr>
         </table>
         <div class="mybiz-note">📌 <strong>Important:</strong> Please carry a printout of this confirmation. Contact Travel Desk for any changes.</div>
         <p class="mybiz-footer-note">Wiom Pravash • Omnia Information Pvt. Ltd. • Automated notification</p>
@@ -2197,13 +2197,13 @@ const FAQ_DATA = [
       { q:'What is the approval workflow?', a:'Requests go through 4 stages: <br><b>1. Employee</b> submits → <b>2. Manager</b> approves → <b>3. Function Head</b> approves → <b>4. Travel Desk</b> processes & books. You receive notifications at each stage.' },
       { q:'How long does approval take?', a:'Manager approval: 1 business day. Function Head approval: 1 business day. Travel Desk processing: 1–2 business days after full approval. For <b>Emergency</b> priority, the process is expedited.' },
       { q:'Can I edit my request after submission?', a:'Yes! You can edit your request only while it is in <b>Pending Manager</b> status. Once the manager approves, the request moves forward and cannot be edited. Click "✏️ Edit" on your request card.' },
-      { q:'Can I cancel a travel request?', a:'Yes. You can cancel your request while it is in <b>Pending Manager</b> status by clicking "✕ Cancel" on your request card. Once approved, contact the Travel Desk (gaurav.kumar@wiom.in) to cancel.' },
+      { q:'Can I cancel a travel request?', a:'Yes. You can cancel your request while it is in <b>Pending Manager</b> status by clicking "✕ Cancel" on your request card. Once approved, contact the Travel Desk (gaurav.singh@wiom.in) to cancel.' },
       { q:'What do the priority levels mean?', a:'<b>📋 Normal</b> — Standard processing (default). <b>⚡ Urgent</b> — Highlighted for faster review, needed within 48 hrs. <b>🚨 Emergency</b> — Immediate attention required, animated red badge, escalated to top of queue.' },
       { q:'What travel modes can I request?', a:'You can request one or more of: ✈️ Flight, 🚂 Train, 🚌 Bus, 🏨 Hotel. Select all that apply for your trip in the request form.' },
       { q:'What are the hotel booking limits per city?', a:'Metro Cities (Mumbai, Delhi, Bangalore, etc.): ₹4,500/night. Non-Metro / Tier-2 / Tier-3 cities: ₹2,500/night. Exceeding the limit requires prior written approval from your Function Head.' },
       { q:'What class am I entitled to for train/flight?', a:'✈️ Flight (>800 km): Economy Class only. 🚂 Train (≤800 km): 3AC (Three-Tier AC). 🚌 Bus: AC Sleeper or Volvo. Upgrades require Function Head approval.' },
       { q:'How do I track my request status?', a:'Login with your credentials → your dashboard shows all requests with live status badges (Pending Manager, Pending Function Head, Pending Travel Desk, Processed, Rejected). Click any request card for full timeline details.' },
-      { q:'Who processes my booking after approval?', a:'Gaurav Kumar (gaurav.kumar@wiom.in) — Travel Desk Admin — processes all approved requests. You will receive a Booking Reference / PNR once your booking is confirmed.' },
+      { q:'Who processes my booking after approval?', a:'Gaurav Singh (gaurav.singh@wiom.in) — Travel Desk Admin — processes all approved requests. You will receive a Booking Reference / PNR once your booking is confirmed.' },
       { q:'What happens after the Travel Desk processes my request?', a:'Your request moves to <b>Processed</b> status. You will see the Booking Reference (PNR/Hotel Conf. No.) and booking notes on your request detail panel. Carry this reference for your travel.' },
     ]
   },
@@ -2291,7 +2291,7 @@ const FAQ_DATA = [
       { q:'Is support available 24/7?', a:'Yes! The dedicated MyBiz corporate support team is available <b>24 hours, 7 days a week</b> — including public holidays.' },
       { q:'How fast will I get a response?', a:'📞 Phone: Immediate | 💬 Live Chat: Instant | 📧 Email: Within 2 hours — all response times are guaranteed.' },
       { q:'What if I face a technical issue on MyBiz?', a:'Contact the support team immediately via any channel. Technical issues are resolved within <b>2 hours</b> or an alternative solution is provided.' },
-      { q:'Who do I contact for Wiom Pravash travel requests?', a:'For Wiom Pravash (this portal), contact Travel Desk: <b>Gaurav Kumar</b> at gaurav.kumar@wiom.in. For MyBiz platform issues, use 1800-102-1234.' },
+      { q:'Who do I contact for Wiom Pravash travel requests?', a:'For Wiom Pravash (this portal), contact Travel Desk: <b>Gaurav Singh</b> at gaurav.singh@wiom.in. For MyBiz platform issues, use 1800-102-1234.' },
       { q:'Is there a help section inside the MyBiz app?', a:'Yes! MyBiz has a comprehensive Help section with video tutorials, step-by-step guides, and FAQs available both in the app and on the website.' },
     ]
   },
@@ -2366,7 +2366,7 @@ function renderFAQ() {
           <span class="faq-chip">📱 1800-102-1234</span>
           <span class="faq-chip">💬 Live Chat on MyBiz</span>
           <span class="faq-chip">📧 corporate@makemytrip.com</span>
-          <span class="faq-chip">📧 gaurav.kumar@wiom.in (Travel Desk)</span>
+          <span class="faq-chip">📧 gaurav.singh@wiom.in (Travel Desk)</span>
         </div>
       </div>
     </div>`;
@@ -2721,7 +2721,7 @@ const POLICY_ANSWERS = {
     💬 Live Chat: mybiz.makemytrip.com<br>
     📧 corporate@makemytrip.com<br><br>
     <b>Wiom Pravash Travel Desk:</b><br>
-    📧 gaurav.kumar@wiom.in<br>
+    📧 gaurav.singh@wiom.in<br>
     ⏰ Support available 24×7`
   }
 };
@@ -2798,7 +2798,7 @@ function processUserMessage(input) {
     • "Cancel policy?"<br>
     • "Request kaise submit karein?"<br>
     • "Support contact?"<br><br>
-    Ya Travel Desk ko directly contact karein:<br>📧 <b>gaurav.kumar@wiom.in</b>`);
+    Ya Travel Desk ko directly contact karein:<br>📧 <b>gaurav.singh@wiom.in</b>`);
 }
 
 // ── Send from input box ──
