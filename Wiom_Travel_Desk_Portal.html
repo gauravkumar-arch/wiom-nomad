@@ -531,12 +531,6 @@
     <div class="otp-icon">🔐</div>
     <h2 class="otp-title">Enter OTP</h2>
     <p class="otp-sub" id="otpSentTo">OTP sent to <strong>—</strong></p>
-    <!-- OTP display box — visible until user enters OTP -->
-    <div id="otpDisplayBox" style="background:rgba(232,27,140,0.15);border:1.5px solid rgba(232,27,140,0.5);border-radius:12px;padding:10px 20px;margin-bottom:14px;display:none;">
-      <p style="color:rgba(255,255,255,0.6);font-size:11px;margin-bottom:4px;">📨 Your OTP (demo mode):</p>
-      <p id="otpDisplayCode" style="color:#fff;font-size:26px;font-weight:900;letter-spacing:8px;text-align:center;"></p>
-      <p style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:4px;">Enter this code in the boxes below</p>
-    </div>
     <div class="otp-digits-wrap">
       <input type="text" maxlength="1" class="otp-digit" id="od1" oninput="otpDigitInput(this,1)" onkeydown="otpDigitKey(this,1)"/>
       <input type="text" maxlength="1" class="otp-digit" id="od2" oninput="otpDigitInput(this,2)" onkeydown="otpDigitKey(this,2)"/>
@@ -972,12 +966,6 @@ function sendOTP() {
     el.value = ''; el.classList.remove('filled');
   });
 
-  // ✅ Show OTP clearly in the on-screen box (demo mode)
-  const displayBox = document.getElementById('otpDisplayBox');
-  const displayCode = document.getElementById('otpDisplayCode');
-  if (displayBox) displayBox.style.display = 'block';
-  if (displayCode) displayCode.textContent = _otpCode;
-
   document.getElementById('od1').focus();
 
   // Start 10-min countdown
@@ -1030,8 +1018,6 @@ function verifyOTP() {
   // OTP correct — login
   clearInterval(_otpTimer);
   _otpCode = '';
-  const db = document.getElementById('otpDisplayBox');
-  if (db) db.style.display = 'none';
   currentUser = _otpUser;
   document.getElementById('loginScreen').classList.add('hidden');
   document.querySelector('.navbar').style.display='flex';
