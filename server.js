@@ -71,24 +71,59 @@ app.post('/api/slack/send-otp', async (req, res) => {
     return res.json({ ok: false, error: 'No Slack config' });
   }
 
+  // Helper: send OTP to channel as fallback
+  async function sendOTPToChannel(reason) {
+    if (!SLACK_WEBHOOK_URL) return { ok: false, error: reason + ' | no webhook fallback' };
+    try {
+      const payload = JSON.stringify({
+        text: `🔐 *OTP for ${name}* (${email})\nYour Wiom Pravash login OTP: *${otp}*\n_Expires in 10 minutes_`
+      });
+      const url = new URL(SLACK_WEBHOOK_URL);
+      await new Promise((resolve, reject) => {
+        const r = https.request({
+          hostname: url.hostname, path: url.pathname, method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+        }, res2 => { let d=''; res2.on('data',c=>d+=c); res2.on('end',()=>resolve(d)); });
+        r.on('error', reject); r.write(payload); r.end();
+      });
+      return { ok: true, via: 'channel', reason };
+    } catch(e2) {
+      return { ok: false, error: reason + ' | webhook failed: ' + e2.message };
+    }
+  }
+
   try {
     // 1. Find Slack user by email
     const userRes = await slackAPI('users.lookupByEmail', { email }, 'GET');
-    const userId = userRes?.user?.id;
-    if (!userId) return res.json({ ok: false, error: 'User not found in Slack' });
+    if (!userRes?.ok || !userRes?.user?.id) {
+      console.log(`[OTP] users.lookupByEmail failed for ${email}:`, JSON.stringify(userRes));
+      return res.json(await sendOTPToChannel('user_not_found_in_slack:' + (userRes?.error || 'unknown')));
+    }
+    const userId = userRes.user.id;
 
     // 2. Open DM channel
     const dmRes = await slackAPI('conversations.open', { users: userId });
-    const channelId = dmRes?.channel?.id;
+    if (!dmRes?.ok || !dmRes?.channel?.id) {
+      console.log(`[OTP] conversations.open failed for ${userId}:`, JSON.stringify(dmRes));
+      return res.json(await sendOTPToChannel('dm_open_failed:' + (dmRes?.error || 'unknown')));
+    }
+    const channelId = dmRes.channel.id;
 
     // 3. Send OTP message
-    await slackAPI('chat.postMessage', {
+    const msgRes = await slackAPI('chat.postMessage', {
       channel: channelId,
       text: `🔐 *Wiom Pravash — Login OTP*\n\nHi *${name}*! Your one-time password is:\n\n*${otp}*\n\n_This OTP expires in 10 minutes. Do not share it with anyone._`
     });
+    if (!msgRes?.ok) {
+      console.log(`[OTP] chat.postMessage failed for ${channelId}:`, JSON.stringify(msgRes));
+      return res.json(await sendOTPToChannel('postMessage_failed:' + (msgRes?.error || 'unknown')));
+    }
+
+    console.log(`[OTP] DM sent to ${email} (userId=${userId})`);
     res.json({ ok: true, via: 'dm' });
   } catch (e) {
-    res.json({ ok: false, error: e.message });
+    console.log(`[OTP] Exception for ${email}:`, e.message);
+    res.json(await sendOTPToChannel('exception:' + e.message));
   }
 });
 
