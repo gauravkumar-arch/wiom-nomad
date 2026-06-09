@@ -35,6 +35,17 @@ app.get('/api/debug/notify-log', (req, res) => {
   res.json({ count: notifyLog.length, log: notifyLog });
 });
 
+// ── Debug: client-side log (captures slackNotify calls even if email is empty) ──
+const clientLog = [];
+app.post('/api/debug/client-log', (req, res) => {
+  clientLog.unshift({ ...req.body, ts: new Date().toISOString() });
+  if (clientLog.length > 30) clientLog.pop();
+  res.json({ ok: true });
+});
+app.get('/api/debug/client-log', (req, res) => {
+  res.json({ count: clientLog.length, log: clientLog });
+});
+
 // ── Slack: Send DM notification to a specific user by email ──
 app.post('/api/slack/notify', async (req, res) => {
   const { text, email } = req.body;
