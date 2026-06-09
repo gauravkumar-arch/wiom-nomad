@@ -7,7 +7,22 @@ const PORT = process.env.PORT || 3000;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 const SLACK_BOT_TOKEN   = process.env.SLACK_BOT_TOKEN   || '';
 
+// ── USERS (needed server-side for Slack interactive approval DMs) ──
+const USERS_DATA = [
+  { id:'U010', name:'Sneha Ghildiyal',     email:'sneha.ghildiyal@wiom.in',     role:'employee' },
+  { id:'U011', name:'Sajan Kumar',         email:'sajan.kumar@wiom.in',          role:'employee' },
+  { id:'U012', name:'Pramod',              email:'pramod@wiom.in',               role:'employee' },
+  { id:'U013', name:'Devashish Mukherjee', email:'devashish.mukherjee@wiom.in',  role:'manager'  },
+  { id:'U014', name:'Garima Makkar',       email:'garima.makkar@wiom.in',        role:'function_head' },
+  { id:'U009', name:'Gaurav Singh',        email:'gaurav.singh@wiom.in',         role:'travel_desk' },
+];
+
+// ── In-memory store for Slack interactive approval flow ──
+const pendingApprovals = new Map();  // reqId → { req, employeeEmail }
+const slackUpdates     = [];         // browser picks these up on next portal load
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));  // needed for Slack action payloads
 app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
@@ -23,42 +38,162 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ── Slack: Send DM notification to a specific user by email ──
+// ── Slack: Send plain DM notification ──
 app.post('/api/slack/notify', async (req, res) => {
   const { text, email } = req.body;
   if (!email) return res.json({ ok: false, error: 'No recipient email provided' });
   if (!SLACK_BOT_TOKEN) return res.json({ ok: false, error: 'No bot token configured' });
+  const result = await dmUser(email, { text });
+  if (!result?.ok) { console.log(`[notify] Failed for ${email}:`, result?.error); return res.json({ ok: false, error: result?.error }); }
+  console.log(`[notify] DM sent to ${email}`);
+  res.json({ ok: true, via: 'dm' });
+});
 
-  try {
-    // 1. Find Slack user by email
-    const userRes = await slackAPI('users.lookupByEmail', { email }, 'GET');
-    if (!userRes?.ok || !userRes?.user?.id) {
-      console.log(`[notify] users.lookupByEmail failed for ${email}:`, JSON.stringify(userRes));
-      return res.json({ ok: false, error: 'user_not_found: ' + (userRes?.error || 'unknown') });
+// ── Slack: Send approval request DM with ✅ Approve / ❌ Reject buttons ──
+app.post('/api/slack/notify-approval', async (req, res) => {
+  const { text, email, reqId, request, employeeEmail } = req.body;
+  if (!email) return res.json({ ok: false, error: 'No email' });
+  if (!SLACK_BOT_TOKEN) return res.json({ ok: false, error: 'No bot token' });
+  // Store request so /slack/actions can look it up when button is clicked
+  if (reqId && request) pendingApprovals.set(reqId, { req: request, employeeEmail: employeeEmail||'' });
+  const result = await dmUser(email, {
+    text,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text } },
+      {
+        type: 'actions',
+        block_id: `approval_${reqId}`,
+        elements: [
+          { type:'button', text:{type:'plain_text',text:'✅ Approve'}, style:'primary', action_id:'approve_request', value: reqId },
+          { type:'button', text:{type:'plain_text',text:'❌ Reject'},  style:'danger',  action_id:'reject_request',  value: reqId }
+        ]
+      }
+    ]
+  });
+  if (!result?.ok) return res.json({ ok: false, error: result?.error });
+  res.json({ ok: true, via: 'dm' });
+});
+
+// ── Sync: browser calls this to update request stored on server ──
+app.post('/api/requests/save', (req, res) => {
+  const { request, employeeEmail } = req.body;
+  if (!request?.id) return res.json({ ok: false, error: 'Missing request.id' });
+  pendingApprovals.set(request.id, { req: request, employeeEmail: employeeEmail||'' });
+  res.json({ ok: true });
+});
+
+// ── Sync: browser polls this on login to get Slack-triggered state changes ──
+app.get('/api/requests/updates', (req, res) => {
+  res.json({ updates: slackUpdates });
+});
+app.post('/api/requests/updates/ack', (req, res) => {
+  const { reqIds } = req.body;
+  if (Array.isArray(reqIds)) reqIds.forEach(id => {
+    const i = slackUpdates.findIndex(u => u.reqId === id);
+    if (i >= 0) slackUpdates.splice(i, 1);
+  });
+  res.json({ ok: true });
+});
+
+// ── Slack Interactive Components webhook ──
+app.post('/slack/actions', async (req, res) => {
+  // URL verification challenge (Slack sends JSON)
+  if (req.body?.type === 'url_verification') return res.json({ challenge: req.body.challenge });
+
+  let payload;
+  try { payload = JSON.parse(req.body.payload); } catch(e) { return res.status(200).end(); }
+  if (payload?.type === 'url_verification') return res.json({ challenge: payload.challenge });
+  if (payload?.type !== 'block_actions') return res.status(200).end();
+
+  // Respond immediately — Slack requires reply within 3 seconds
+  res.status(200).end();
+
+  const action      = payload.actions?.[0];
+  const responseUrl = payload.response_url;
+  const slackUser   = payload.user || {};
+  if (!action) return;
+
+  const actionId = action.action_id;
+  const reqId    = action.value;
+  const stored   = pendingApprovals.get(reqId);
+  const byName   = slackUser.real_name || slackUser.name || 'Approver';
+
+  if (!stored) {
+    if (responseUrl) await httpsPost(responseUrl, {
+      replace_original: true,
+      text: `⚠️ *${reqId}* — Session expired. Please approve via portal: https://wiom-pravash-production.up.railway.app`
+    }).catch(()=>{});
+    return;
+  }
+
+  const { req: request, employeeEmail } = stored;
+  const today = new Date().toISOString().split('T')[0];
+  const fhUser = USERS_DATA.find(u => u.role === 'function_head');
+  const tdUser = USERS_DATA.find(u => u.role === 'travel_desk');
+
+  // Determine approver role from request's current status
+  const approverRole = request.status === 'PENDING_MANAGER' ? 'manager' : 'function_head';
+
+  if (actionId === 'approve_request') {
+    if (approverRole === 'manager') {
+      // Update stored request to next state
+      const updatedReq = { ...request, status: 'PENDING_FUNCTION_HEAD' };
+      pendingApprovals.set(reqId, { req: updatedReq, employeeEmail });
+
+      // Queue browser sync
+      slackUpdates.push({ reqId, status: 'PENDING_FUNCTION_HEAD',
+        history: { action:'APPROVED BY MANAGER', by:byName, role:'Manager', date:today, comment:'Approved via Slack' }
+      });
+
+      // Notify Function Head with approval buttons
+      const fhText = `:white_check_mark: *Manager Approved* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Date:* ${request.travelDate||'—'}\n:airplane: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:white_check_mark: *Approved by:* ${byName} (Manager)\n:clipboard: *Your final approval is needed*`;
+      await dmUser(fhUser?.email||'', {
+        text: fhText,
+        blocks: [
+          { type:'section', text:{type:'mrkdwn', text:fhText} },
+          { type:'actions', block_id:`approval_${reqId}`, elements:[
+            { type:'button', text:{type:'plain_text',text:'✅ Approve'}, style:'primary', action_id:'approve_request', value:reqId },
+            { type:'button', text:{type:'plain_text',text:'❌ Reject'},  style:'danger',  action_id:'reject_request',  value:reqId }
+          ]}
+        ]
+      });
+
+      // Notify employee
+      await dmUser(employeeEmail, { text:`:white_check_mark: *${reqId}* — Approved by your manager! Pending final approval from Function Head.` });
+
+    } else {
+      // Function Head final approval
+      pendingApprovals.delete(reqId);
+      slackUpdates.push({ reqId, status: 'PENDING_TRAVEL_DESK',
+        history: { action:'APPROVED BY FUNCTION HEAD', by:byName, role:'Function Head', date:today, comment:'Approved via Slack' }
+      });
+
+      // Notify Travel Desk
+      await dmUser(tdUser?.email||'', { text:`:white_check_mark: *Final Approval Done — Book Tickets* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Travel Date:* ${request.travelDate||'—'}\n:airplane: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:white_check_mark: *Approved by:* ${byName} (Function Head)\n:ticket: *Action Required:* Please book the tickets on MyBiz and update the portal.` });
+
+      // Notify Employee with MMT links
+      const types = (request.types||[]).map(t=>t.toLowerCase());
+      const links = [];
+      if(types.includes('flight')) links.push(':airplane: *Flight:* https://mybiz.makemytrip.com/flights');
+      if(types.includes('train'))  links.push(':bullettrain_side: *Train:* https://mybiz.makemytrip.com/trains');
+      if(types.includes('bus'))    links.push(':bus: *Bus:* https://mybiz.makemytrip.com/bus');
+      if(types.includes('hotel'))  links.push(':hotel: *Hotel:* https://mybiz.makemytrip.com/hotels');
+      if(links.length===0) links.push(':link: *Book here:* https://mybiz.makemytrip.com');
+      await dmUser(employeeEmail, { text:`:tada: *Your Travel Request is Approved!* — ${reqId}\n\nHi *${request.employeeName}*,\n\nYour travel request has been *fully approved* by ${byName}.\n\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Travel Date:* ${request.travelDate||'—'}\n:clipboard: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:dart: *Purpose:* ${request.purpose}\n\n:link: *Book your tickets on MyBiz:*\n${links.join('\n')}` });
     }
 
-    // 2. Open DM channel
-    const dmRes = await slackAPI('conversations.open', { users: userRes.user.id });
-    if (!dmRes?.ok || !dmRes?.channel?.id) {
-      console.log(`[notify] conversations.open failed for ${userRes.user.id}:`, JSON.stringify(dmRes));
-      return res.json({ ok: false, error: 'dm_open_failed: ' + (dmRes?.error || 'unknown') });
-    }
+    // Update original Slack message (replace buttons)
+    if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:white_check_mark: *${reqId}* — Approved by ${byName}` }).catch(()=>{});
 
-    // 3. Send DM
-    const msgRes = await slackAPI('chat.postMessage', {
-      channel: dmRes.channel.id,
-      text
+  } else if (actionId === 'reject_request') {
+    pendingApprovals.delete(reqId);
+    slackUpdates.push({ reqId, status:'REJECTED',
+      history: { action:`REJECTED BY ${approverRole==='manager'?'MANAGER':'FUNCTION HEAD'}`, by:byName, role:approverRole==='manager'?'Manager':'Function Head', date:today, comment:'Rejected via Slack' }
     });
-    if (!msgRes?.ok) {
-      console.log(`[notify] chat.postMessage failed:`, JSON.stringify(msgRes));
-      return res.json({ ok: false, error: 'postMessage_failed: ' + (msgRes?.error || 'unknown') });
-    }
 
-    console.log(`[notify] DM sent to ${email}`);
-    res.json({ ok: true, via: 'dm' });
-  } catch (e) {
-    console.log(`[notify] Exception for ${email}:`, e.message);
-    res.json({ ok: false, error: e.message });
+    await dmUser(employeeEmail, { text:`:x: *Request Rejected* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName}\n:dart: *Purpose:* ${request.purpose}\n:no_entry_sign: *Rejected by:* ${byName} (${approverRole==='manager'?'Manager':'Function Head'})\n:speech_balloon: *Reason:* Rejected via Slack` });
+
+    if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:x: *${reqId}* — Rejected by ${byName}` }).catch(()=>{});
   }
 });
 
@@ -101,6 +236,31 @@ app.post('/api/slack/send-otp', async (req, res) => {
     res.json({ ok: false, error: 'exception: ' + e.message });
   }
 });
+
+// ── Helper: POST to arbitrary HTTPS URL (used for Slack response_url) ──
+function httpsPost(urlStr, body) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(urlStr);
+    const payload = JSON.stringify(body);
+    const r = https.request({
+      hostname: u.hostname, path: u.pathname + u.search, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+    }, res => { let d=''; res.on('data',c=>d+=c); res.on('end',()=>{ try{resolve(JSON.parse(d));}catch{resolve(d);} }); });
+    r.on('error', reject); r.write(payload); r.end();
+  });
+}
+
+// ── Helper: open DM channel and send message to user by email ──
+async function dmUser(email, payload) {
+  if (!email || !SLACK_BOT_TOKEN) return { ok: false, error: 'no_token_or_email' };
+  try {
+    const uRes = await slackAPI('users.lookupByEmail', { email }, 'GET');
+    if (!uRes?.ok || !uRes?.user?.id) return { ok: false, error: 'user_not_found' };
+    const dRes = await slackAPI('conversations.open', { users: uRes.user.id });
+    if (!dRes?.ok || !dRes?.channel?.id) return { ok: false, error: 'dm_open_failed' };
+    return await slackAPI('chat.postMessage', { channel: dRes.channel.id, ...payload });
+  } catch(e) { console.log('[dmUser] Exception:', e.message); return { ok: false, error: e.message }; }
+}
 
 function slackAPI(method, body, httpMethod = 'POST') {
   return new Promise((resolve, reject) => {

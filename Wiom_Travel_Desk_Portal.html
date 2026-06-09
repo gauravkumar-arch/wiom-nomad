@@ -907,6 +907,8 @@ function enterPortal() {
   document.getElementById('mainContainer').style.display = 'block';
   document.querySelector('.footer').style.display   = 'block';
   render();
+  // Sync any Slack-approved/rejected updates into localStorage
+  syncSlackUpdates();
   // Show chatbot bubble after login
   showChatBubble();
 }
@@ -1052,6 +1054,42 @@ function slackNotify(text, email) {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ text, email })
   }).catch(()=>{});
+}
+
+// Sends DM with ✅ Approve / ❌ Reject buttons (for manager & function head notifications)
+function slackNotifyApproval(text, email, reqId, request, employeeEmail) {
+  if (!email) return;
+  fetch('/api/slack/notify-approval', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ text, email, reqId, request, employeeEmail })
+  }).catch(()=>{});
+}
+
+// Sync any Slack-triggered status changes into localStorage and re-render
+async function syncSlackUpdates() {
+  try {
+    const r = await fetch('/api/requests/updates');
+    const { updates } = await r.json();
+    if (!updates?.length) return;
+    let changed = false;
+    updates.forEach(u => {
+      const req = requests.find(r => r.id === u.reqId);
+      if (req) {
+        req.status = u.status;
+        if (u.history) req.history.push(u.history);
+        changed = true;
+      }
+    });
+    if (changed) {
+      save(); render();
+      await fetch('/api/requests/updates/ack', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ reqIds: updates.map(u => u.reqId) })
+      });
+    }
+  } catch(e) {}
 }
 
 // ── Toast notification (replaces alert) ──
@@ -1811,12 +1849,13 @@ function submitRequest(e) {
   requests.push(req);
   save(); closeNewReq(); render();
   showToast(`✅ ${id} submitted! Sent to ${req.manager || 'Function Head'} for approval.`, 'success');
-  // Notify approver (manager or function head) via DM
+  // Notify approver (manager or function head) via DM with Approve/Reject buttons
   const _approverUser = req.manager
     ? USERS.find(u=>u.name===req.manager && u.role==='manager')
     : USERS.find(u=>u.role==='function_head');
   const _approverEmail = _approverUser ? _approverUser.email : (USERS.find(u=>u.role==='function_head')||{}).email;
-  slackNotify(`:clipboard: *New Travel Request* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:airplane: *Mode:* ${req.types?.join(' + ')}\n:calendar: *Date:* ${req.travelDate}\n:zap: *Priority:* ${req.priority||'Normal'}\n:hourglass_flowing_sand: *Pending approval from* ${req.manager||'Function Head'}`, _approverEmail);
+  const _notifyText = `:clipboard: *New Travel Request* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:airplane: *Mode:* ${req.types?.join(' + ')}\n:calendar: *Date:* ${req.travelDate}\n:hourglass_flowing_sand: *Pending approval from* ${req.manager||'Function Head'}`;
+  slackNotifyApproval(_notifyText, _approverEmail, id, req, currentUser.email);
 }
 
 function cancelRequest(reqId) {
@@ -1860,9 +1899,11 @@ function confirmApprove(){
     req.status='PENDING_FUNCTION_HEAD';
     req.history.push({action:'APPROVED BY MANAGER',by:currentUser.name,role:'Manager',date:today(),comment});
     save();closeApproveModal();render();
-    // Notify Function Head via DM
+    // Notify Function Head via DM with Approve/Reject buttons
     const _fhUser = USERS.find(u=>u.role==='function_head');
-    slackNotify(`:white_check_mark: *Manager Approved* — ${req.id}\n:bust_in_silhouette: *Employee:* ${req.employeeName}\n:dart: *Purpose:* ${req.purpose}\n:white_check_mark: *Approved by:* ${currentUser.name} (Manager)\n:clipboard: *Next:* Pending your approval`, _fhUser ? _fhUser.email : '');
+    const _empUser = USERS.find(u=>u.id===req.employeeId);
+    const _fhText = `:white_check_mark: *Manager Approved* — ${req.id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n:calendar: *Date:* ${req.travelDate||'—'}\n:airplane: *Mode:* ${req.types?.join(' + ')||'—'}\n:white_check_mark: *Approved by:* ${currentUser.name} (Manager)\n:clipboard: *Your final approval is needed*`;
+    slackNotifyApproval(_fhText, _fhUser ? _fhUser.email : '', req.id, req, _empUser ? _empUser.email : '');
   } else {
     req.status='PENDING_TRAVEL_DESK';
     req.history.push({action:'APPROVED BY FUNCTION HEAD',by:currentUser.name,role:'Function Head',date:today(),comment});
