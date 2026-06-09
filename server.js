@@ -14,6 +14,15 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'Wiom_Travel_Desk_Portal.html'));
 });
 
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    slack_webhook: !!SLACK_WEBHOOK_URL,
+    slack_bot: !!SLACK_BOT_TOKEN,
+    webhook_preview: SLACK_WEBHOOK_URL ? SLACK_WEBHOOK_URL.substring(0, 40) + '...' : null
+  });
+});
+
 // ── Slack: Send channel notification ──
 app.post('/api/slack/notify', async (req, res) => {
   const { text, blocks } = req.body;
