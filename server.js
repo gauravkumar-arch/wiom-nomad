@@ -95,30 +95,13 @@ app.post('/api/requests/updates/ack', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Debug: show pending approvals + last action received ──
-const actionLog = [];
-app.get('/api/debug/actions', (req, res) => {
-  const pending = {};
-  pendingApprovals.forEach((v, k) => { pending[k] = { status: v.req?.status, employee: v.employeeEmail }; });
-  res.json({ pendingCount: pendingApprovals.size, pending, lastActions: actionLog });
-});
-
 // ── Slack Interactive Components webhook ──
 app.post('/slack/actions', async (req, res) => {
-  console.log('[slack/actions] received. body keys:', Object.keys(req.body||{}));
-
   // URL verification challenge (Slack sends JSON)
   if (req.body?.type === 'url_verification') return res.json({ challenge: req.body.challenge });
 
   let payload;
-  try { payload = JSON.parse(req.body.payload); } catch(e) {
-    console.log('[slack/actions] JSON.parse failed:', e.message, '| raw:', JSON.stringify(req.body).substring(0,200));
-    return res.status(200).end();
-  }
-  console.log('[slack/actions] type:', payload?.type, '| action:', payload?.actions?.[0]?.action_id, '| value:', payload?.actions?.[0]?.value);
-  actionLog.unshift({ ts: new Date().toISOString(), type: payload?.type, actionId: payload?.actions?.[0]?.action_id, value: payload?.actions?.[0]?.value, user: payload?.user?.name });
-  if (actionLog.length > 10) actionLog.pop();
-
+  try { payload = JSON.parse(req.body.payload); } catch(e) { return res.status(200).end(); }
   if (payload?.type === 'url_verification') return res.json({ challenge: payload.challenge });
   if (payload?.type !== 'block_actions') return res.status(200).end();
 
@@ -133,7 +116,6 @@ app.post('/slack/actions', async (req, res) => {
   const actionId = action.action_id;
   const reqId    = action.value;
   const stored   = pendingApprovals.get(reqId);
-  console.log(`[slack/actions] reqId=${reqId} found=${!!stored} pendingKeys=[${[...pendingApprovals.keys()].join(',')}]`);
   // Resolve full name: match Slack username to USERS_DATA email prefix
   const _matchedUser = USERS_DATA.find(u => u.email.split('@')[0] === slackUser.name);
   const byName = _matchedUser?.name || slackUser.real_name || slackUser.name || 'Approver';
