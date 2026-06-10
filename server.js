@@ -116,7 +116,9 @@ app.post('/slack/actions', async (req, res) => {
   const actionId = action.action_id;
   const reqId    = action.value;
   const stored   = pendingApprovals.get(reqId);
-  const byName   = slackUser.real_name || slackUser.name || 'Approver';
+  // Resolve full name: match Slack username to USERS_DATA email prefix
+  const _matchedUser = USERS_DATA.find(u => u.email.split('@')[0] === slackUser.name);
+  const byName = _matchedUser?.name || slackUser.real_name || slackUser.name || 'Approver';
 
   if (!stored) {
     if (responseUrl) await httpsPost(responseUrl, {
