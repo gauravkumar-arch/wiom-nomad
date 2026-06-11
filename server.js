@@ -293,6 +293,57 @@ function slackAPI(method, body, httpMethod = 'POST') {
   });
 }
 
+// ── Slack: App Home view ──
+async function publishHomeView(userId) {
+  const view = {
+    type: 'home',
+    blocks: [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: '✈️ Wiom Pravash — Travel Portal', emoji: true }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*Welcome to Wiom Pravash!*\n\nSubmit and track your travel requests online.\nClick the button below to open the portal and login with your OTP.'
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: '🚀 Open Travel Portal', emoji: true },
+            url: 'https://wiom-pravash-production.up.railway.app',
+            action_id: 'open_portal',
+            style: 'primary'
+          }
+        ]
+      },
+      { type: 'divider' },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: ':link: *Portal URL:* https://wiom-pravash-production.up.railway.app\n:lock: *Login:* Use your work email — OTP will be sent to your Slack DM'
+        }
+      }
+    ]
+  };
+  return await slackAPI('views.publish', { user_id: userId, view });
+}
+
+// ── Slack: Event Subscriptions webhook ──
+app.post('/slack/events', async (req, res) => {
+  const body = req.body;
+  if (body?.type === 'url_verification') return res.json({ challenge: body.challenge });
+  res.status(200).end();
+  if (body?.type === 'event_callback' && body.event?.type === 'app_home_opened') {
+    await publishHomeView(body.event.user).catch(e => console.log('[AppHome] Error:', e.message));
+  }
+});
+
 // ── Slack OAuth Setup ──
 const SLACK_CLIENT_ID     = process.env.SLACK_CLIENT_ID     || '3369108117617.11288528264194';
 const SLACK_CLIENT_SECRET = process.env.SLACK_CLIENT_SECRET || 'd4a32573a15e93fedcae4847eeca2fa3';
