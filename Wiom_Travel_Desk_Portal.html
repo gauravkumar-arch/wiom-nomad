@@ -849,7 +849,7 @@ const USERS = [
   { id:'U012', name:'Pramod',              email:'pramod@wiom.in',               dept:'HR',    role:'employee',      manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'P'  },
   { id:'U013', name:'Devashish Mukherjee', email:'devashish.mukherjee@wiom.in',  dept:'HR',    role:'manager',       functionHead:'Garima Makkar', initials:'DM' },
   { id:'U014', name:'Garima Makkar',       email:'garima.makkar@wiom.in',        dept:'HR',    role:'function_head', initials:'GM' },
-  { id:'U009', name:'Gaurav Singh',        email:'gaurav.singh@wiom.in',         dept:'Admin', role:'travel_desk',   initials:'GS' },
+  { id:'U009', name:'Gaurav Singh',        email:'gaurav.singh@wiom.in',         dept:'Admin', role:'travel_desk',   manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'GS' },
 ];
 
 const ROLE_LABELS = { employee:'👤 Employee', manager:'👔 Manager', function_head:'🏢 Function Head', travel_desk:'🎫 Travel Desk' };
@@ -1388,16 +1388,32 @@ function renderTravelDesk(c) {
   const proc  = requests.filter(r=>r.status==='PROCESSED');
   const inApp = requests.filter(r=>['PENDING_MANAGER','PENDING_FUNCTION_HEAD'].includes(r.status)).length;
   const allR  = [...requests].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+  const isTeam = approverView !== 'mine';
+  const myReqs    = requests.filter(r=>r.employeeId===currentUser.id).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const myInProg  = myReqs.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length;
+
   const show  = secTab==='processed'?proc : secTab==='analytics'?null : secTab==='calendar'?null : secTab==='policy'?null : secTab==='faq'?null : secTab==='all'?allR : pend;
+  const myShow = secTab==='done'?myReqs.filter(r=>r.status==='PROCESSED') : secTab==='rejected'?myReqs.filter(r=>['REJECTED','CANCELLED'].includes(r.status)) : secTab==='pending'?myReqs.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status)) : myReqs;
 
   c.innerHTML = `
     ${wfBanner(4)}
     <div class="page-header">
-      <div><h2>Travel Desk — Booking Queue</h2><p>Process approved requests and manage all bookings</p></div>
+      <div><h2>${isTeam ? 'Travel Desk — Booking Queue' : '👤 My Requests'}</h2>
+        <p>${isTeam ? 'Process approved requests and manage all bookings' : 'Submit and track your own travel requests'}</p>
+      </div>
       <div class="header-actions">
-        <button class="btn-export" onclick="exportCSV()">📤 Export CSV</button>
+        ${!isTeam ? `<button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>` : ''}
+        ${isTeam ? `<button class="btn-export" onclick="exportCSV()">📤 Export CSV</button>` : ''}
       </div>
     </div>
+
+    <div class="view-toggle">
+      <button class="view-toggle-btn team ${isTeam?'active':''}" onclick="setApproverView('team')">🎫 Booking Queue ${pend.length>0?`<span class="tab-count">${pend.length}</span>`:''}</button>
+      <button class="view-toggle-btn mine ${!isTeam?'active':''}" onclick="setApproverView('mine')">👤 My Requests ${myInProg>0?`<span class="tab-count">${myInProg}</span>`:''}</button>
+    </div>
+
+    ${isTeam ? `
     <div class="stats-row">
       <div class="stat-card" onclick="setTab('pending')" style="cursor:pointer"><div class="stat-icon" style="background:#f0e6ff">🎫</div><div><h3>${pend.length}</h3><p>Pending Booking</p></div></div>
       <div class="stat-card" onclick="setTab('processed')" style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${proc.length}</h3><p>Processed</p></div></div>
@@ -1417,7 +1433,23 @@ function renderTravelDesk(c) {
       ${secTab==='analytics' ? renderAnalytics() : secTab==='calendar' ? renderCalendar() : secTab==='policy' ? renderTravelPolicy() : secTab==='faq' ? renderFAQ() :
         show.length===0 ? `<div class="empty-state"><div class="e-icon">🎉</div><p>No requests here.</p></div>` :
         `<div class="requests-grid">${show.map(r=>reqCard(r,'travel_desk')).join('')}</div>`}
-    </div>`;
+    </div>` : `
+    <div class="stats-row">
+      <div class="stat-card" onclick="setTab('all')" style="cursor:pointer"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${myReqs.length}</h3><p>Total Requests</p></div></div>
+      <div class="stat-card" onclick="setTab('pending')" style="cursor:pointer"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${myInProg}</h3><p>In Progress</p></div></div>
+      <div class="stat-card" onclick="setTab('done')" style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${myReqs.filter(r=>r.status==='PROCESSED').length}</h3><p>Processed</p></div></div>
+      <div class="stat-card" onclick="setTab('rejected')" style="cursor:pointer"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${myReqs.filter(r=>['REJECTED','CANCELLED'].includes(r.status)).length}</h3><p>Rejected</p></div></div>
+    </div>
+    <div class="section-tabs">
+      <button class="sec-tab ${secTab==='all'?'active':''}"      onclick="setTab('all')">📋 All (${myReqs.length})</button>
+      <button class="sec-tab ${secTab==='pending'?'active':''}"  onclick="setTab('pending')">⏳ In Progress ${myInProg>0?`<span class="tab-count">${myInProg}</span>`:''}</button>
+      <button class="sec-tab ${secTab==='done'?'active':''}"     onclick="setTab('done')">✅ Processed (${myReqs.filter(r=>r.status==='PROCESSED').length})</button>
+      <button class="sec-tab ${secTab==='rejected'?'active':''}" onclick="setTab('rejected')">❌ Rejected</button>
+    </div>
+    <div class="requests-grid">
+      ${myShow.map(r=>reqCard(r,'td_self')).join('') ||
+        `<div class="empty-state"><div class="e-icon">✈️</div><p>No requests yet.<br>Click <b>"New Travel Request"</b> to get started!</p></div>`}
+    </div>`}`;
 
   if (secTab==='analytics') setTimeout(drawCharts, 100);
 }
@@ -1430,7 +1462,8 @@ function reqCard(r, vr) {
   const canSelfEdit =
     (vr==='employee'     && r.status==='PENDING_MANAGER') ||
     (vr==='manager_self' && r.status==='PENDING_FUNCTION_HEAD') ||
-    (vr==='fh_self'      && r.status==='PENDING_TRAVEL_DESK');
+    (vr==='fh_self'      && r.status==='PENDING_TRAVEL_DESK') ||
+    (vr==='td_self'      && r.status==='PENDING_MANAGER');
   const empActions = canSelfEdit ? `
     <div class="emp-actions" onclick="event.stopPropagation()">
       <button class="btn-edit" onclick="openEditReq('${r.id}')">✏️ Edit</button>
@@ -1521,7 +1554,6 @@ function selectPriority(p) {
 
 // ═══ NEW REQUEST ═══
 function openNewReq() {
-  if (currentUser.role==='travel_desk') { showToast('Travel Desk cannot submit travel requests.','error'); return; }
   selTypes=[];
   document.getElementById('formTitle').textContent  = '✈️ New Travel Request';
   document.getElementById('formSubmitBtn').textContent = '🚀 Submit Request';
@@ -1774,7 +1806,8 @@ function submitRequest(e) {
     const canUpdate =
       (currentUser.role==='employee'      && req.status==='PENDING_MANAGER') ||
       (currentUser.role==='manager'       && req.employeeId===currentUser.id && req.status==='PENDING_FUNCTION_HEAD') ||
-      (currentUser.role==='function_head' && req.employeeId===currentUser.id && req.status==='PENDING_TRAVEL_DESK');
+      (currentUser.role==='function_head' && req.employeeId===currentUser.id && req.status==='PENDING_TRAVEL_DESK') ||
+      (currentUser.role==='travel_desk'   && req.employeeId===currentUser.id && req.status==='PENDING_MANAGER');
     if (!canUpdate) {
       showToast('🔒 Request cannot be modified at this stage.','error');
       closeNewReq(); return;
@@ -1864,7 +1897,8 @@ function cancelRequest(reqId) {
   const canCancel =
     (currentUser.role==='employee'      && req.status==='PENDING_MANAGER') ||
     (currentUser.role==='manager'       && req.employeeId===currentUser.id && req.status==='PENDING_FUNCTION_HEAD') ||
-    (currentUser.role==='function_head' && req.employeeId===currentUser.id && req.status==='PENDING_TRAVEL_DESK');
+    (currentUser.role==='function_head' && req.employeeId===currentUser.id && req.status==='PENDING_TRAVEL_DESK') ||
+    (currentUser.role==='travel_desk'   && req.employeeId===currentUser.id && req.status==='PENDING_MANAGER');
   if (!canCancel) {
     alert('🔒 This request cannot be cancelled at this stage.');
     return;
