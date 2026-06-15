@@ -1513,10 +1513,11 @@ function setApproverView(v) { approverView=v; secTab='pending'; render(); }
 
 // ═══ PRIORITY SELECTOR ═══
 function selectPriority(p) {
-  document.getElementById('f_priority').value = p;
+  const inp = document.getElementById('f_priority');
+  if (inp) inp.value = p;
   ['Normal','Urgent','Emergency'].forEach(x=>{
     const el = document.getElementById(`popt_${x}`);
-    el.className = 'priority-opt' + (x===p?` sel-${x.toLowerCase()}`:'');
+    if (el) el.className = 'priority-opt' + (x===p?` sel-${x.toLowerCase()}`:'');
   });
 }
 
