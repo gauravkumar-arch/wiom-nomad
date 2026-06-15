@@ -1623,7 +1623,7 @@ function checkBookingPolicy() {
   if (hasTransport && tDateVal) {
     const tDate = new Date(tDateVal); tDate.setHours(0,0,0,0);
     const diffDays = Math.ceil((tDate - today) / (1000*60*60*24));
-    if (diffDays < 7) violations.push(`✈️ Ticket booking requires <strong>7 days</strong> prior notice. You have <strong>${diffDays} day(s)</strong>.`);
+    if (diffDays < 3) violations.push(`✈️ Ticket booking requires <strong>3 days</strong> prior notice. You have <strong>${diffDays} day(s)</strong>.`);
   }
   if (hasHotel && hCiVal) {
     const ciDate = new Date(hCiVal); ciDate.setHours(0,0,0,0);
