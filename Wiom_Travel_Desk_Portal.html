@@ -1167,7 +1167,7 @@ function checkPendingEmailNotifs() {
 function updateNotifBadge() {
   const role = currentUser.role;
   let count = 0;
-  if (role==='manager')       count = requests.filter(r=>r.manager===currentUser.name && r.status==='PENDING_MANAGER').length;
+  if (role==='manager')       count = 0;
   if (role==='function_head') count = requests.filter(r=>r.functionHead===currentUser.name && r.status==='PENDING_FUNCTION_HEAD').length;
   if (role==='travel_desk')   count = requests.filter(r=>r.status==='PENDING_TRAVEL_DESK').length;
   if (role==='employee')      count = requests.filter(r=>r.employeeId===currentUser.id && !['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length;
@@ -1235,8 +1235,8 @@ function renderEmployee(c) {
 // ─── MANAGER VIEW ───
 function renderManager(c) {
   const teamReqs     = requests.filter(r=>r.manager===currentUser.name).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-  const pend         = teamReqs.filter(r=>r.status==='PENDING_MANAGER');
-  const teamApproved = teamReqs.filter(r=>r.status!=='PENDING_MANAGER'&&r.status!=='REJECTED'&&r.status!=='CANCELLED');
+  const pend         = teamReqs.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status));
+  const teamApproved = teamReqs.filter(r=>r.status==='PROCESSED');
   const teamRejected = teamReqs.filter(r=>['REJECTED','CANCELLED'].includes(r.status));
   const myReqs   = requests.filter(r=>r.employeeId===currentUser.id).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
   const myInProg = myReqs.filter(r=>!['PROCESSED','REJECTED','CANCELLED'].includes(r.status)).length;
@@ -1250,35 +1250,35 @@ function renderManager(c) {
   c.innerHTML = `
     <div class="page-header" style="margin-bottom:16px;">
       <div><h2>${isTeam ? '👥 Team Requests' : '👤 My Requests'}</h2>
-        <p>${isTeam ? 'Review and approve travel requests from your team' : 'Submit and track your own travel requests'}</p>
+        <p>${isTeam ? 'View your team's travel requests' : 'Submit and track your own travel requests'}</p>
       </div>
       ${!isTeam ? `<button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>` : ''}
     </div>
 
     <!-- View Toggle -->
     <div class="view-toggle">
-      <button class="view-toggle-btn team ${isTeam?'active':''}" onclick="setApproverView('team')">👥 Team Requests ${pend.length>0?`<span class="tab-count">${pend.length}</span>`:''}</button>
+      <button class="view-toggle-btn team ${isTeam?'active':''}" onclick="setApproverView('team')">👥 Team Requests</button>
       <button class="view-toggle-btn mine ${!isTeam?'active':''}" onclick="setApproverView('mine')">👤 My Requests ${myInProg>0?`<span class="tab-count">${myInProg}</span>`:''}</button>
     </div>
 
     ${isTeam ? `
       <!-- TEAM VIEW -->
       <div class="stats-row">
-        <div class="stat-card" onclick="setTab('pending')"  style="cursor:pointer"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${pend.length}</h3><p>Pending Approval</p></div></div>
-        <div class="stat-card" onclick="setTab('approved')" style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${teamApproved.length}</h3><p>Approved</p></div></div>
+        <div class="stat-card" onclick="setTab('pending')"  style="cursor:pointer"><div class="stat-icon" style="background:#fffbeb">⏳</div><div><h3>${pend.length}</h3><p>In Progress</p></div></div>
+        <div class="stat-card" onclick="setTab('approved')" style="cursor:pointer"><div class="stat-icon" style="background:#f0fff4">✅</div><div><h3>${teamApproved.length}</h3><p>Processed</p></div></div>
         <div class="stat-card" onclick="setTab('rejected')" style="cursor:pointer"><div class="stat-icon" style="background:#fff5f5">❌</div><div><h3>${teamRejected.length}</h3><p>Rejected</p></div></div>
         <div class="stat-card" onclick="setTab('all')"      style="cursor:pointer"><div class="stat-icon" style="background:#ebf8ff">📋</div><div><h3>${teamReqs.length}</h3><p>Total Team</p></div></div>
       </div>
       <div class="section-tabs">
-        <button class="sec-tab ${secTab==='pending'?'active':''}"  onclick="setTab('pending')">⏳ Pending ${pend.length>0?`<span class="tab-count">${pend.length}</span>`:''}</button>
-        <button class="sec-tab ${secTab==='approved'?'active':''}" onclick="setTab('approved')">✅ Approved (${teamApproved.length})</button>
+        <button class="sec-tab ${secTab==='pending'?'active':''}"  onclick="setTab('pending')">⏳ In Progress ${pend.length>0?`<span class="tab-count">${pend.length}</span>`:''}</button>
+        <button class="sec-tab ${secTab==='approved'?'active':''}" onclick="setTab('approved')">✅ Processed (${teamApproved.length})</button>
         <button class="sec-tab ${secTab==='rejected'?'active':''}" onclick="setTab('rejected')">❌ Rejected ${teamRejected.length>0?`<span class="tab-count" style="background:#e53e3e">${teamRejected.length}</span>`:''}</button>
         <button class="sec-tab ${secTab==='all'?'active':''}"      onclick="setTab('all')">📋 All (${teamReqs.length})</button>
         <button class="sec-tab ${secTab==='policy'?'active':''}"   onclick="setTab('policy')">📜 Travel Policy</button>
         <button class="sec-tab ${secTab==='faq'?'active':''}"      onclick="setTab('faq')">❓ FAQ</button>
       </div>
       ${secTab==='policy' ? renderTravelPolicy() : secTab==='faq' ? renderFAQ() :
-        `<div class="requests-grid">${show.length===0?`<div class="empty-state"><div class="e-icon">${secTab==='rejected'?'✅':'🎉'}</div><p>No ${secTab==='rejected'?'rejected':secTab==='approved'?'approved':'pending'} requests!</p></div>`:show.map(r=>reqCard(r,'manager')).join('')}</div>`}
+        `<div class="requests-grid">${show.length===0?`<div class="empty-state"><div class="e-icon">🎉</div><p>No requests here!</p></div>`:show.map(r=>reqCard(r,'manager_view')).join('')}</div>`}
     ` : `
       <!-- MY REQUESTS VIEW -->
       <div class="stats-row">
@@ -1321,7 +1321,7 @@ function renderFunctionHead(c) {
   c.innerHTML = `
     <div class="page-header" style="margin-bottom:16px;">
       <div><h2>${isTeam ? '👥 Team Requests' : '👤 My Requests'}</h2>
-        <p>${isTeam ? 'Review and approve travel requests from your team' : 'Submit and track your own travel requests'}</p>
+        <p>${isTeam ? 'View your team's travel requests' : 'Submit and track your own travel requests'}</p>
       </div>
       ${!isTeam ? `<button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>` : ''}
     </div>
@@ -1428,10 +1428,10 @@ function reqCard(r, vr) {
   const exceptionBadge = r.isException ? `<span style="background:#fff3cd;color:#c05621;border:1px solid #f6c90e;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;margin-left:6px;">⚠️ EXCEPTION</span>` : '';
   const actions = cardActions(r,vr);
   const canSelfEdit =
-    (vr==='employee'     && r.status==='PENDING_MANAGER') ||
+    (vr==='employee'     && r.status==='PENDING_FUNCTION_HEAD') ||
     (vr==='manager_self' && r.status==='PENDING_FUNCTION_HEAD') ||
     (vr==='fh_self'      && r.status==='PENDING_TRAVEL_DESK') ||
-    (vr==='td_self'      && r.status==='PENDING_MANAGER');
+    (vr==='td_self'      && r.status==='PENDING_FUNCTION_HEAD');
   const empActions = canSelfEdit ? `
     <div class="emp-actions" onclick="event.stopPropagation()">
       <button class="btn-edit" onclick="openEditReq('${r.id}')">✏️ Edit</button>
@@ -1469,8 +1469,6 @@ function reqCard(r, vr) {
 }
 
 function cardActions(r,vr) {
-  if (vr==='manager' && r.status==='PENDING_MANAGER')
-    return `<button class="btn-approve" onclick="openApproveModal('${r.id}','manager')">✓ Approve</button><button class="btn-reject" onclick="openRejectModal('${r.id}','manager')">✕ Reject</button>`;
   if (vr==='function_head' && r.status==='PENDING_FUNCTION_HEAD')
     return `<button class="btn-approve" onclick="openApproveModal('${r.id}','function_head')">✓ Approve</button><button class="btn-reject" onclick="openRejectModal('${r.id}','function_head')">✕ Reject</button>`;
   if (vr==='travel_desk' && r.status==='PENDING_TRAVEL_DESK')
@@ -1773,10 +1771,10 @@ function submitRequest(e) {
     const req = requests.find(r=>r.id===editId);
     if (!req) return;
     const canUpdate =
-      (currentUser.role==='employee'      && req.status==='PENDING_MANAGER') ||
+      (currentUser.role==='employee'      && req.status==='PENDING_FUNCTION_HEAD') ||
       (currentUser.role==='manager'       && req.employeeId===currentUser.id && req.status==='PENDING_FUNCTION_HEAD') ||
       (currentUser.role==='function_head' && req.employeeId===currentUser.id && req.status==='PENDING_TRAVEL_DESK') ||
-      (currentUser.role==='travel_desk'   && req.employeeId===currentUser.id && req.status==='PENDING_MANAGER');
+      (currentUser.role==='travel_desk'   && req.employeeId===currentUser.id && req.status==='PENDING_FUNCTION_HEAD');
     if (!canUpdate) {
       showToast('🔒 Request cannot be modified at this stage.','error');
       closeNewReq(); return;
@@ -1819,7 +1817,7 @@ function submitRequest(e) {
     initFHeadName    = currentUser.name;            // self
     submitterRoleLabel = 'Function Head';
   } else {
-    initStatus       = 'PENDING_MANAGER';
+    initStatus       = 'PENDING_FUNCTION_HEAD';
     initManagerName  = currentUser.manager || '';
     initFHeadName    = currentUser.functionHead || '';
     submitterRoleLabel = 'Employee';
@@ -1850,24 +1848,24 @@ function submitRequest(e) {
   if (selTypes.includes('hotel'))  req.hotel  = { city:v('f_hCity'), roomType:v('f_hRoom'), checkin:v('f_hCheckin'), checkout:v('f_hCheckout'), pref:v('f_hPref') };
   requests.push(req);
   save(); closeNewReq(); render();
-  showToast(`✅ ${id} submitted! Sent to ${req.manager || 'Function Head'} for approval.`, 'success');
-  // Notify approver (manager or function head) via DM with Approve/Reject buttons
-  const _approverUser = req.manager
-    ? USERS.find(u=>u.name===req.manager && u.role==='manager')
-    : USERS.find(u=>u.role==='function_head');
-  const _approverEmail = _approverUser ? _approverUser.email : (USERS.find(u=>u.role==='function_head')||{}).email;
-  const _notifyText = `:clipboard: *New Travel Request* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:airplane: *Mode:* ${req.types?.join(' + ')}\n:calendar: *Date:* ${req.travelDate}\n:hourglass_flowing_sand: *Pending approval from* ${req.manager||'Function Head'}`;
-  slackNotifyApproval(_notifyText, _approverEmail, id, req, currentUser.email);
+  showToast(`✅ ${id} submitted! Sent to Function Head for approval.`, 'success');
+  const _notifyText = `:clipboard: *New Travel Request* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:airplane: *Mode:* ${req.types?.join(' + ')}\n:calendar: *Date:* ${req.travelDate}\n:hourglass_flowing_sand: *Pending approval from Function Head*`;
+  // Plain notification to manager (no buttons)
+  const _managerUser = USERS.find(u=>u.name===req.manager && u.role==='manager');
+  if (_managerUser) slackNotify(`:bell: *New Travel Request Submitted* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:calendar: *Date:* ${req.travelDate}\n:information_source: This request is pending Function Head approval.`, _managerUser.email);
+  // Approval DM with buttons to Function Head
+  const _fhUser = USERS.find(u=>u.role==='function_head');
+  slackNotifyApproval(_notifyText, _fhUser ? _fhUser.email : '', id, req, currentUser.email);
 }
 
 function cancelRequest(reqId) {
   const req = requests.find(r=>r.id===reqId);
   if (!req) return;
   const canCancel =
-    (currentUser.role==='employee'      && req.status==='PENDING_MANAGER') ||
+    (currentUser.role==='employee'      && req.status==='PENDING_FUNCTION_HEAD') ||
     (currentUser.role==='manager'       && req.employeeId===currentUser.id && req.status==='PENDING_FUNCTION_HEAD') ||
     (currentUser.role==='function_head' && req.employeeId===currentUser.id && req.status==='PENDING_TRAVEL_DESK') ||
-    (currentUser.role==='travel_desk'   && req.employeeId===currentUser.id && req.status==='PENDING_MANAGER');
+    (currentUser.role==='travel_desk'   && req.employeeId===currentUser.id && req.status==='PENDING_FUNCTION_HEAD');
   if (!canCancel) {
     alert('🔒 This request cannot be cancelled at this stage.');
     return;
@@ -1898,16 +1896,7 @@ function closeApproveModal(){document.getElementById('approveModal').classList.r
 function confirmApprove(){
   const {reqId,role}=pendingAct, comment=document.getElementById('approveComment').value.trim();
   const req=requests.find(r=>r.id===reqId); if(!req)return;
-  if(role==='manager'){
-    req.status='PENDING_FUNCTION_HEAD';
-    req.history.push({action:'APPROVED BY MANAGER',by:currentUser.name,role:'Manager',date:today(),comment});
-    save();closeApproveModal();render();
-    // Notify Function Head via DM with Approve/Reject buttons
-    const _fhUser = USERS.find(u=>u.role==='function_head');
-    const _empUser = USERS.find(u=>u.id===req.employeeId);
-    const _fhText = `:white_check_mark: *Manager Approved* — ${req.id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity||'—'} → ${req.toCity||'—'}\n:calendar: *Date:* ${req.travelDate||'—'}\n:airplane: *Mode:* ${req.types?.join(' + ')||'—'}\n:white_check_mark: *Approved by:* ${currentUser.name} (Manager)\n:clipboard: *Your final approval is needed*`;
-    slackNotifyApproval(_fhText, _fhUser ? _fhUser.email : '', req.id, req, _empUser ? _empUser.email : '');
-  } else {
+  {
     req.status='PENDING_TRAVEL_DESK';
     req.history.push({action:'APPROVED BY FUNCTION HEAD',by:currentUser.name,role:'Function Head',date:today(),comment});
     // Mark pending email notifications (will show when recipients login)
@@ -2242,7 +2231,6 @@ function travelDetails(r) {
 
 function detailActions(r) {
   const role=currentUser.role;
-  if(role==='manager'&&r.status==='PENDING_MANAGER') return `<button class="btn-approve" onclick="openApproveFromDetail('manager')">✓ Approve</button><button class="btn-reject" onclick="openRejectFromDetail('manager')">✕ Reject</button>`;
   if(role==='function_head'&&r.status==='PENDING_FUNCTION_HEAD') return `<button class="btn-approve" onclick="openApproveFromDetail('function_head')">✓ Approve</button><button class="btn-reject" onclick="openRejectFromDetail('function_head')">✕ Reject</button>`;
   if(role==='travel_desk'&&r.status==='PENDING_TRAVEL_DESK') return `<button class="btn-process" onclick="openProcessFromDetail()">🎫 Book Now</button>`;
   return '';

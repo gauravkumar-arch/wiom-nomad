@@ -133,67 +133,35 @@ app.post('/slack/actions', async (req, res) => {
   const fhUser = USERS_DATA.find(u => u.role === 'function_head');
   const tdUser = USERS_DATA.find(u => u.role === 'travel_desk');
 
-  // Determine approver role from request's current status
-  const approverRole = request.status === 'PENDING_MANAGER' ? 'manager' : 'function_head';
-
   if (actionId === 'approve_request') {
-    if (approverRole === 'manager') {
-      // Update stored request to next state
-      const updatedReq = { ...request, status: 'PENDING_FUNCTION_HEAD' };
-      pendingApprovals.set(reqId, { req: updatedReq, employeeEmail });
+    // Function Head approval → PENDING_TRAVEL_DESK
+    pendingApprovals.delete(reqId);
+    slackUpdates.push({ reqId, status: 'PENDING_TRAVEL_DESK',
+      history: { action:'APPROVED BY FUNCTION HEAD', by:byName, role:'Function Head', date:today, comment:'Approved via Slack' }
+    });
 
-      // Queue browser sync
-      slackUpdates.push({ reqId, status: 'PENDING_FUNCTION_HEAD',
-        history: { action:'APPROVED BY MANAGER', by:byName, role:'Manager', date:today, comment:'Approved via Slack' }
-      });
+    // Notify Travel Desk
+    await dmUser(tdUser?.email||'', { text:`:white_check_mark: *Final Approval Done — Book Tickets* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Travel Date:* ${request.travelDate||'—'}\n:airplane: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:white_check_mark: *Approved by:* ${byName} (Function Head)\n:ticket: *Action Required:* Please book the tickets on MyBiz and update the portal.` });
 
-      // Notify Function Head with approval buttons
-      const fhText = `:white_check_mark: *Manager Approved* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Date:* ${request.travelDate||'—'}\n:airplane: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:white_check_mark: *Approved by:* ${byName} (Manager)\n:clipboard: *Your final approval is needed*`;
-      await dmUser(fhUser?.email||'', {
-        text: fhText,
-        blocks: [
-          { type:'section', text:{type:'mrkdwn', text:fhText} },
-          { type:'actions', block_id:`approval_${reqId}`, elements:[
-            { type:'button', text:{type:'plain_text',text:'✅ Approve'}, style:'primary', action_id:'approve_request', value:reqId },
-            { type:'button', text:{type:'plain_text',text:'❌ Reject'},  style:'danger',  action_id:'reject_request',  value:reqId }
-          ]}
-        ]
-      });
+    // Notify Employee with MMT links
+    const types = (request.types||[]).map(t=>t.toLowerCase());
+    const links = [];
+    if(types.includes('flight')) links.push(':airplane: *Flight:* https://mybiz.makemytrip.com/flights');
+    if(types.includes('train'))  links.push(':bullettrain_side: *Train:* https://mybiz.makemytrip.com/trains');
+    if(types.includes('bus'))    links.push(':bus: *Bus:* https://mybiz.makemytrip.com/bus');
+    if(types.includes('hotel'))  links.push(':hotel: *Hotel:* https://mybiz.makemytrip.com/hotels');
+    if(links.length===0) links.push(':link: *Book here:* https://mybiz.makemytrip.com');
+    await dmUser(employeeEmail, { text:`:tada: *Your Travel Request is Approved!* — ${reqId}\n\nHi *${request.employeeName}*,\n\nYour travel request has been *fully approved* by ${byName}.\n\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Travel Date:* ${request.travelDate||'—'}\n:clipboard: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:dart: *Purpose:* ${request.purpose}\n\n:link: *Book your tickets on MyBiz:*\n${links.join('\n')}` });
 
-      // Notify employee
-      await dmUser(employeeEmail, { text:`:white_check_mark: *${reqId}* — Approved by your manager! Pending final approval from Function Head.` });
-
-    } else {
-      // Function Head final approval
-      pendingApprovals.delete(reqId);
-      slackUpdates.push({ reqId, status: 'PENDING_TRAVEL_DESK',
-        history: { action:'APPROVED BY FUNCTION HEAD', by:byName, role:'Function Head', date:today, comment:'Approved via Slack' }
-      });
-
-      // Notify Travel Desk
-      await dmUser(tdUser?.email||'', { text:`:white_check_mark: *Final Approval Done — Book Tickets* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Travel Date:* ${request.travelDate||'—'}\n:airplane: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:white_check_mark: *Approved by:* ${byName} (Function Head)\n:ticket: *Action Required:* Please book the tickets on MyBiz and update the portal.` });
-
-      // Notify Employee with MMT links
-      const types = (request.types||[]).map(t=>t.toLowerCase());
-      const links = [];
-      if(types.includes('flight')) links.push(':airplane: *Flight:* https://mybiz.makemytrip.com/flights');
-      if(types.includes('train'))  links.push(':bullettrain_side: *Train:* https://mybiz.makemytrip.com/trains');
-      if(types.includes('bus'))    links.push(':bus: *Bus:* https://mybiz.makemytrip.com/bus');
-      if(types.includes('hotel'))  links.push(':hotel: *Hotel:* https://mybiz.makemytrip.com/hotels');
-      if(links.length===0) links.push(':link: *Book here:* https://mybiz.makemytrip.com');
-      await dmUser(employeeEmail, { text:`:tada: *Your Travel Request is Approved!* — ${reqId}\n\nHi *${request.employeeName}*,\n\nYour travel request has been *fully approved* by ${byName}.\n\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Travel Date:* ${request.travelDate||'—'}\n:clipboard: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:dart: *Purpose:* ${request.purpose}\n\n:link: *Book your tickets on MyBiz:*\n${links.join('\n')}` });
-    }
-
-    // Update original Slack message (replace buttons)
-    if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:white_check_mark: *${reqId}* — Approved by ${byName}` }).catch(()=>{});
+    if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:white_check_mark: *${reqId}* — Approved by ${byName} (Function Head)` }).catch(()=>{});
 
   } else if (actionId === 'reject_request') {
     pendingApprovals.delete(reqId);
     slackUpdates.push({ reqId, status:'REJECTED',
-      history: { action:`REJECTED BY ${approverRole==='manager'?'MANAGER':'FUNCTION HEAD'}`, by:byName, role:approverRole==='manager'?'Manager':'Function Head', date:today, comment:'Rejected via Slack' }
+      history: { action:'REJECTED BY FUNCTION HEAD', by:byName, role:'Function Head', date:today, comment:'Rejected via Slack' }
     });
 
-    await dmUser(employeeEmail, { text:`:x: *Request Rejected* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName}\n:dart: *Purpose:* ${request.purpose}\n:no_entry_sign: *Rejected by:* ${byName} (${approverRole==='manager'?'Manager':'Function Head'})\n:speech_balloon: *Reason:* Rejected via Slack` });
+    await dmUser(employeeEmail, { text:`:x: *Request Rejected* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName}\n:dart: *Purpose:* ${request.purpose}\n:no_entry_sign: *Rejected by:* ${byName} (Function Head)\n:speech_balloon: *Reason:* Rejected via Slack` });
 
     if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:x: *${reqId}* — Rejected by ${byName}` }).catch(()=>{});
   }
