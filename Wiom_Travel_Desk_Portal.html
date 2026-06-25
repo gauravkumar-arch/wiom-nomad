@@ -835,6 +835,14 @@
 </div>
 
 <script>
+// Global error catcher — shows JS errors on screen
+window.onerror = function(msg, src, line, col, err) {
+  var d = document.getElementById('_jsErrBar');
+  if (!d) { d = document.createElement('div'); d.id = '_jsErrBar'; d.style = 'position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;padding:10px 16px;font-size:13px;z-index:999999;font-family:monospace;'; document.body.appendChild(d); }
+  d.innerHTML = '🔴 JS Error: ' + msg + ' (line ' + line + ')';
+  return false;
+};
+
 // ═══ USERS ═══
 const USERS = [
   // ── Wiom HR Team ──
