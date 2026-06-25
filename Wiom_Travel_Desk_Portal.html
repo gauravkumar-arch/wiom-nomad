@@ -953,9 +953,16 @@ function sendOTP() {
   }).then(r=>r.json()).then(d=>{
     if (d.ok) {
       document.getElementById('otpSentTo').innerHTML =
-        `OTP sent to <strong>${email}</strong> via <strong>Slack ${d.via==='dm'?'DM':'channel'}</strong> 💬`;
+        `OTP sent to <strong>${email}</strong> via <strong>Slack DM</strong> 💬`;
+    } else {
+      // Slack failed — show OTP directly on screen (internal use only)
+      document.getElementById('otpSentTo').innerHTML =
+        `⚠️ Slack DM unavailable. Your OTP: <strong style="font-size:22px;letter-spacing:4px;color:#e94560;">${_otpCode}</strong>`;
     }
-  }).catch(()=>{});
+  }).catch(()=>{
+    document.getElementById('otpSentTo').innerHTML =
+      `⚠️ Slack unreachable. Your OTP: <strong style="font-size:22px;letter-spacing:4px;color:#e94560;">${_otpCode}</strong>`;
+  });
 
   // Switch to OTP entry screen
   document.getElementById('otpStep1').style.display = 'none';
