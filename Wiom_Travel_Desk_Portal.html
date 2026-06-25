@@ -934,7 +934,9 @@ let _otpCode = '', _otpUser = null, _otpTimer = null;
 function sendOTP() {
   const errDiv = document.getElementById('otpEmailError');
   if (errDiv) errDiv.textContent = '';
-  const email = document.getElementById('otpEmail').value.trim().toLowerCase();
+  const raw = document.getElementById('otpEmail').value;
+  const email = raw.trim().toLowerCase();
+  alert('DEBUG — email entered: [' + email + ']\nUSERS count: ' + USERS.length + '\nMatch found: ' + !!USERS.find(u => u.email.toLowerCase() === email));
   if (!email) {
     if (errDiv) errDiv.textContent = '⚠️ Please enter your email address';
     return;
