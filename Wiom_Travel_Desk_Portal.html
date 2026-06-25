@@ -848,7 +848,7 @@ const ROLE_LABELS = { employee:'👤 Employee', manager:'👔 Manager', function
 
 // ═══ SEED DATA ═══
 const SEED = [
-  { id:'REQ-001', employeeId:'U010', employeeName:'Sneha Ghildiyal', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Flight'], purpose:'HR Compliance Workshop – Bangalore', travelers:'1', fromCity:'Delhi', toCity:'Bangalore', travelDate:'2026-06-05', returnDate:'2026-06-07', flight:{time:'Morning (8–12 PM)'}, notes:'Annual compliance workshop, mandatory attendance.', priority:'Normal', status:'PENDING_MANAGER', comments:[], history:[{action:'SUBMITTED',by:'Sneha Ghildiyal',role:'Employee',date:'2026-05-28',comment:''}], createdAt:'2026-05-28T10:00:00' },
+  { id:'REQ-001', employeeId:'U010', employeeName:'Sneha Ghildiyal', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Flight'], purpose:'HR Compliance Workshop – Bangalore', travelers:'1', fromCity:'Delhi', toCity:'Bangalore', travelDate:'2026-06-05', returnDate:'2026-06-07', flight:{time:'Morning (8–12 PM)'}, notes:'Annual compliance workshop, mandatory attendance.', priority:'Normal', status:'PENDING_FUNCTION_HEAD', comments:[], history:[{action:'SUBMITTED',by:'Sneha Ghildiyal',role:'Employee',date:'2026-05-28',comment:''}], createdAt:'2026-05-28T10:00:00' },
   { id:'REQ-002', employeeId:'U011', employeeName:'Sajan Kumar', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Train','Hotel'], purpose:'Recruitment Drive – Lucknow', travelers:'1', fromCity:'Delhi', toCity:'Lucknow', travelDate:'2026-06-08', returnDate:'2026-06-10', train:{time:'Morning (6–12 PM)',class:'AC 2 Tier (2A)'}, hotel:{city:'Lucknow', roomType:'Single Room', checkin:'2026-06-08', checkout:'2026-06-10', pref:'Near Hazratganj'}, notes:'Campus recruitment at 2 colleges.', priority:'Urgent', status:'PENDING_FUNCTION_HEAD', comments:[{id:'c1',by:'Devashish Mukherjee',role:'Manager',text:'Approved. Coordinate with college POCs.',date:'2026-05-29'}], history:[{action:'SUBMITTED',by:'Sajan Kumar',role:'Employee',date:'2026-05-27',comment:''},{action:'APPROVED BY MANAGER',by:'Devashish Mukherjee',role:'Manager',date:'2026-05-29',comment:'Approved. Coordinate with college POCs.'}], createdAt:'2026-05-27T09:00:00' },
   { id:'REQ-003', employeeId:'U012', employeeName:'Pramod', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Bus'], purpose:'Payroll Audit – Noida Office', travelers:'1', fromCity:'Delhi', toCity:'Noida', travelDate:'2026-06-03', returnDate:'2026-06-03', bus:{time:'Morning',type:'Volvo AC'}, notes:'One-day audit, same-day return.', priority:'Normal', status:'PENDING_TRAVEL_DESK', comments:[], history:[{action:'SUBMITTED',by:'Pramod',role:'Employee',date:'2026-05-25',comment:''},{action:'APPROVED BY MANAGER',by:'Devashish Mukherjee',role:'Manager',date:'2026-05-26',comment:'Approved.'},{action:'APPROVED BY FUNCTION HEAD',by:'Garima Makkar',role:'Function Head',date:'2026-05-27',comment:'Approved. Keep it within budget.'}], createdAt:'2026-05-25T11:00:00' },
   { id:'REQ-004', employeeId:'U013', employeeName:'Devashish Mukherjee', dept:'HR', manager:'Devashish Mukherjee', functionHead:'Garima Makkar', types:['Flight','Hotel'], purpose:'HR Leadership Summit – Mumbai', travelers:'1', fromCity:'Delhi', toCity:'Mumbai', travelDate:'2026-06-12', returnDate:'2026-06-14', flight:{time:'Afternoon (12–5 PM)'}, hotel:{city:'Mumbai', roomType:'Single Room', checkin:'2026-06-12', checkout:'2026-06-14', pref:'BKC or Nariman Point'}, notes:'National HR summit, representing Wiom.', priority:'Urgent', status:'PENDING_FUNCTION_HEAD', comments:[], history:[{action:'SUBMITTED',by:'Devashish Mukherjee',role:'Manager',date:'2026-05-28',comment:''}], createdAt:'2026-05-28T14:00:00' },
@@ -871,8 +871,16 @@ let chartInstances = {};
 function init() {
   const stored = localStorage.getItem('wiom_travel_v3');
   requests = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(SEED));
-  if (!stored) save();
-  // userLoginSelect removed — now using OTP login
+  // Migrate: PENDING_MANAGER → PENDING_FUNCTION_HEAD (manager approval removed)
+  let migrated = false;
+  requests.forEach(r => {
+    if (r.status === 'PENDING_MANAGER') {
+      r.status = 'PENDING_FUNCTION_HEAD';
+      r.history.push({action:'AUTO-MIGRATED',by:'System',role:'System',date:today(),comment:'Manager approval removed — moved to Function Head'});
+      migrated = true;
+    }
+  });
+  if (migrated || !stored) save();
 }
 
 function save() { localStorage.setItem('wiom_travel_v3', JSON.stringify(requests)); }
@@ -1557,7 +1565,7 @@ function openEditReq(reqId) {
   const r = requests.find(x=>x.id===reqId);
   if (!r) return;
   const canEdit =
-    (currentUser.role==='employee'      && r.status==='PENDING_MANAGER') ||
+    (currentUser.role==='employee'      && r.status==='PENDING_FUNCTION_HEAD') ||
     (currentUser.role==='manager'       && r.employeeId===currentUser.id && r.status==='PENDING_FUNCTION_HEAD') ||
     (currentUser.role==='function_head' && r.employeeId===currentUser.id && r.status==='PENDING_TRAVEL_DESK');
   if (!canEdit) {
