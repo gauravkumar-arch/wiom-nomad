@@ -525,7 +525,7 @@
     </button>
     <div id="otpEmailError" style="color:#e94560;font-size:13px;margin-top:8px;min-height:20px;"></div>
     <p class="otp-hint">OTP will be sent to your Slack DM</p>
-    <p style="color:rgba(255,255,255,0.15);font-size:10px;margin-top:12px;">v2.7 — Jun 25</p>
+    <p style="color:rgba(255,255,255,0.15);font-size:10px;margin-top:12px;">v2.8 — Jun 25</p>
   </div>
 
   <!-- ── STEP 2: OTP Verify ── -->
@@ -1281,7 +1281,7 @@ function renderManager(c) {
   c.innerHTML = `
     <div class="page-header" style="margin-bottom:16px;">
       <div><h2>${isTeam ? '👥 Team Requests' : '👤 My Requests'}</h2>
-        <p>${isTeam ? 'View your team's travel requests' : 'Submit and track your own travel requests'}</p>
+        <p>${isTeam ? "View your team's travel requests" : "Submit and track your own travel requests"}</p>
       </div>
       ${!isTeam ? `<button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>` : ''}
     </div>
@@ -1352,7 +1352,7 @@ function renderFunctionHead(c) {
   c.innerHTML = `
     <div class="page-header" style="margin-bottom:16px;">
       <div><h2>${isTeam ? '👥 Team Requests' : '👤 My Requests'}</h2>
-        <p>${isTeam ? 'View your team's travel requests' : 'Submit and track your own travel requests'}</p>
+        <p>${isTeam ? "View your team's travel requests" : "Submit and track your own travel requests"}</p>
       </div>
       ${!isTeam ? `<button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>` : ''}
     </div>
