@@ -512,19 +512,20 @@
     <span style="color:rgba(255,255,255,0.5);font-style:italic;">One portal. Every journey.</span>
   </div>
 
-  <!-- ── STEP 1: Email Entry ── -->
+  <!-- ── STEP 1: User Select ── -->
   <div id="otpStep1" class="otp-box">
-    <div class="otp-icon">✉️</div>
-    <h2 class="otp-title">Sign In with Email OTP</h2>
-    <p class="otp-sub">Enter your registered work email to receive a one-time password</p>
+    <div class="otp-icon">👤</div>
+    <h2 class="otp-title">Sign In</h2>
+    <p class="otp-sub">Select your name to login</p>
     <div class="otp-input-wrap">
-      <input type="text" id="otpEmail" class="otp-email-input" placeholder="yourname@wiom.in" autocomplete="off" onkeydown="if(event.key==='Enter')sendOTP()"/>
+      <select id="userSelect" style="width:100%;padding:14px 16px;border-radius:12px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.08);color:#fff;font-size:15px;outline:none;cursor:pointer;">
+        <option value="" style="background:#1a1a2e;color:#999;">— Select your name —</option>
+      </select>
     </div>
-    <button type="button" class="btn-login btn-login-user" onclick="sendOTP()" style="max-width:320px;margin-top:6px;">
-      📨 Send OTP
+    <button type="button" class="btn-login btn-login-user" onclick="loginDirect()" style="max-width:320px;margin-top:12px;">
+      🚀 Login
     </button>
     <div id="otpEmailError" style="color:#e94560;font-size:13px;margin-top:8px;min-height:20px;"></div>
-    <p class="otp-hint">OTP will be sent to your registered email ID</p>
   </div>
 
   <!-- ── STEP 2: OTP Verify ── -->
@@ -870,14 +871,34 @@ let chartInstances = {};
 
 // ═══ INIT ═══
 function init() {
-  const stored = localStorage.getItem('wiom_travel_v3');
-  requests = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(SEED));
-  // Migrate: PENDING_MANAGER → PENDING_FUNCTION_HEAD (manager approval removed)
+  // Populate user dropdown
+  const sel = document.getElementById('userSelect');
+  if (sel) {
+    USERS.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.name + ' (' + (u.role === 'travel_desk' ? 'Travel Desk' : u.role === 'function_head' ? 'Function Head' : u.role === 'manager' ? 'Manager' : 'Employee') + ')';
+      opt.style.background = '#1a1a2e';
+      sel.appendChild(opt);
+    });
+  }
+
+  let stored = null;
+  try {
+    stored = localStorage.getItem('wiom_travel_v3');
+    requests = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(SEED));
+  } catch(e) {
+    localStorage.removeItem('wiom_travel_v3');
+    requests = JSON.parse(JSON.stringify(SEED));
+    stored = null;
+  }
+  // Migrate: PENDING_MANAGER → PENDING_FUNCTION_HEAD
   let migrated = false;
   requests.forEach(r => {
     if (r.status === 'PENDING_MANAGER') {
       r.status = 'PENDING_FUNCTION_HEAD';
-      r.history.push({action:'AUTO-MIGRATED',by:'System',role:'System',date:today(),comment:'Manager approval removed — moved to Function Head'});
+      if (!r.history) r.history = [];
+      r.history.push({action:'AUTO-MIGRATED',by:'System',role:'System',date:today(),comment:'Migrated'});
       migrated = true;
     }
   });
@@ -931,57 +952,40 @@ function setMinDate(fromId, toId) {
 // ═══ OTP LOGIN SYSTEM ═══
 let _otpCode = '', _otpUser = null, _otpTimer = null;
 
-function sendOTP() {
+function loginDirect() {
   const errDiv = document.getElementById('otpEmailError');
   if (errDiv) errDiv.textContent = '';
-  const raw = document.getElementById('otpEmail').value;
-  const email = raw.trim().toLowerCase();
-  alert('DEBUG — email entered: [' + email + ']\nUSERS count: ' + USERS.length + '\nMatch found: ' + !!USERS.find(u => u.email.toLowerCase() === email));
-  if (!email) {
-    if (errDiv) errDiv.textContent = '⚠️ Please enter your email address';
+  const sel = document.getElementById('userSelect');
+  const userId = sel ? sel.value : '';
+  if (!userId) {
+    if (errDiv) errDiv.textContent = '⚠️ Please select your name';
     return;
   }
-
-  // Find user by email
-  const user = USERS.find(u => u.email.toLowerCase() === email);
+  const user = USERS.find(u => u.id === userId);
   if (!user) {
-    if (errDiv) errDiv.textContent = '❌ Email not registered: ' + email;
+    if (errDiv) errDiv.textContent = '❌ User not found';
     return;
   }
+  currentUser = user;
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.querySelector('.navbar').style.display = 'flex';
+  document.getElementById('mainContainer').style.display = 'block';
+  secTab = 'pending'; approverView = 'team';
+  syncSlackUpdates();
+  render();
+}
 
-  // Generate 6-digit OTP
-  _otpCode = String(Math.floor(100000 + Math.random() * 900000));
-  _otpUser = user;
+function sendOTP() {
+  // Legacy — kept for compatibility
+  loginDirect();
+}
 
-  // Switch to OTP entry screen immediately
-  document.getElementById('otpStep1').style.display = 'none';
-  document.getElementById('otpStep2').style.display = 'block';
-  // Show OTP on screen right away — always visible
-  document.getElementById('otpSentTo').innerHTML =
-    `Your OTP: <strong style="font-size:26px;letter-spacing:6px;color:#e94560;display:inline-block;margin-top:4px;">${_otpCode}</strong><br><small style="color:#888;font-size:12px;">Also sending via Slack DM...</small>`;
-
-  // Try Slack in background (optional — OTP already on screen)
+function _sendOTPViaSlack(email, otp, name) {
+  // Slack OTP — background only, not used for login
   fetch('/api/slack/send-otp', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ email, otp: _otpCode, name: user.name })
-  }).then(r=>r.json()).then(d=>{
-    if (d.ok) {
-      document.getElementById('otpSentTo').innerHTML =
-        `Your OTP: <strong style="font-size:26px;letter-spacing:6px;color:#e94560;display:inline-block;margin-top:4px;">${_otpCode}</strong><br><small style="color:#27ae60;font-size:12px;">✓ Also sent via Slack DM</small>`;
-    }
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ email, otp, name })
   }).catch(()=>{});
-
-  // Clear digit fields
-  ['od1','od2','od3','od4','od5','od6'].forEach(id => {
-    const el = document.getElementById(id);
-    el.value = ''; el.classList.remove('filled');
-  });
-
-  document.getElementById('od1').focus();
-
-  // Start 10-min countdown
-  startOTPTimer(600);
 }
 
 function startOTPTimer(seconds) {
