@@ -512,20 +512,19 @@
     <span style="color:rgba(255,255,255,0.5);font-style:italic;">One portal. Every journey.</span>
   </div>
 
-  <!-- ── STEP 1: User Select ── -->
+  <!-- ── STEP 1: Email Entry ── -->
   <div id="otpStep1" class="otp-box">
-    <div class="otp-icon">👤</div>
-    <h2 class="otp-title">Sign In</h2>
-    <p class="otp-sub">Select your name to login</p>
+    <div class="otp-icon">✉️</div>
+    <h2 class="otp-title">Sign In with OTP</h2>
+    <p class="otp-sub">Enter your registered work email to receive a one-time password</p>
     <div class="otp-input-wrap">
-      <select id="userSelect" style="width:100%;padding:14px 16px;border-radius:12px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.08);color:#fff;font-size:15px;outline:none;cursor:pointer;">
-        <option value="" style="background:#1a1a2e;color:#999;">— Select your name —</option>
-      </select>
+      <input type="text" id="otpEmail" class="otp-email-input" placeholder="yourname@wiom.in" autocomplete="off" onkeydown="if(event.key==='Enter')sendOTP()"/>
     </div>
-    <button type="button" class="btn-login btn-login-user" onclick="loginDirect()" style="max-width:320px;margin-top:12px;">
-      🚀 Login
+    <button type="button" class="btn-login btn-login-user" onclick="sendOTP()" style="max-width:320px;margin-top:6px;">
+      📨 Send OTP
     </button>
     <div id="otpEmailError" style="color:#e94560;font-size:13px;margin-top:8px;min-height:20px;"></div>
+    <p class="otp-hint">OTP will be sent to your Slack DM</p>
   </div>
 
   <!-- ── STEP 2: OTP Verify ── -->
@@ -871,18 +870,6 @@ let chartInstances = {};
 
 // ═══ INIT ═══
 function init() {
-  // Populate user dropdown
-  const sel = document.getElementById('userSelect');
-  if (sel) {
-    USERS.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value = u.id;
-      opt.textContent = u.name + ' (' + (u.role === 'travel_desk' ? 'Travel Desk' : u.role === 'function_head' ? 'Function Head' : u.role === 'manager' ? 'Manager' : 'Employee') + ')';
-      opt.style.background = '#1a1a2e';
-      sel.appendChild(opt);
-    });
-  }
-
   let stored = null;
   try {
     stored = localStorage.getItem('wiom_travel_v3');
@@ -952,32 +939,45 @@ function setMinDate(fromId, toId) {
 // ═══ OTP LOGIN SYSTEM ═══
 let _otpCode = '', _otpUser = null, _otpTimer = null;
 
-function loginDirect() {
+function sendOTP() {
   const errDiv = document.getElementById('otpEmailError');
   if (errDiv) errDiv.textContent = '';
-  const sel = document.getElementById('userSelect');
-  const userId = sel ? sel.value : '';
-  if (!userId) {
-    if (errDiv) errDiv.textContent = '⚠️ Please select your name';
-    return;
-  }
-  const user = USERS.find(u => u.id === userId);
-  if (!user) {
-    if (errDiv) errDiv.textContent = '❌ User not found';
-    return;
-  }
-  currentUser = user;
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.querySelector('.navbar').style.display = 'flex';
-  document.getElementById('mainContainer').style.display = 'block';
-  secTab = 'pending'; approverView = 'team';
-  syncSlackUpdates();
-  render();
-}
+  const email = document.getElementById('otpEmail').value.trim().toLowerCase();
+  if (!email) { if (errDiv) errDiv.textContent = '⚠️ Please enter your email address'; return; }
 
-function sendOTP() {
-  // Legacy — kept for compatibility
-  loginDirect();
+  const user = USERS.find(u => u.email.toLowerCase() === email);
+  if (!user) {
+    if (errDiv) errDiv.textContent = '❌ Email not registered. Contact Travel Desk.';
+    return;
+  }
+
+  _otpCode = String(Math.floor(100000 + Math.random() * 900000));
+  _otpUser = user;
+
+  // Switch screen immediately
+  document.getElementById('otpStep1').style.display = 'none';
+  document.getElementById('otpStep2').style.display = 'block';
+  // Always show OTP on screen
+  document.getElementById('otpSentTo').innerHTML =
+    `Your OTP: <strong style="font-size:28px;letter-spacing:8px;color:#e94560;">${_otpCode}</strong><br><small style="color:#888;font-size:12px;">Also sending to your Slack DM...</small>`;
+
+  // Clear OTP digit inputs
+  ['od1','od2','od3','od4','od5','od6'].forEach(id => {
+    const el = document.getElementById(id); if(el){el.value='';el.classList.remove('filled');}
+  });
+  const first = document.getElementById('od1'); if(first) first.focus();
+  startOTPTimer(600);
+
+  // Try Slack in background
+  fetch('/api/slack/send-otp', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ email, otp: _otpCode, name: user.name })
+  }).then(r=>r.json()).then(d=>{
+    if (d.ok) {
+      document.getElementById('otpSentTo').innerHTML =
+        `Your OTP: <strong style="font-size:28px;letter-spacing:8px;color:#e94560;">${_otpCode}</strong><br><small style="color:#27ae60;font-size:12px;">✓ Also sent to Slack DM</small>`;
+    }
+  }).catch(()=>{});
 }
 
 function _sendOTPViaSlack(email, otp, name) {
