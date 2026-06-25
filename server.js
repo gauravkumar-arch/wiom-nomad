@@ -26,6 +26,9 @@ app.use(express.urlencoded({ extended: true }));  // needed for Slack action pay
 app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, 'Wiom_Travel_Desk_Portal.html'));
 });
 

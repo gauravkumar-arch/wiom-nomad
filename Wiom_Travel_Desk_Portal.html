@@ -518,11 +518,12 @@
     <h2 class="otp-title">Sign In with Email OTP</h2>
     <p class="otp-sub">Enter your registered work email to receive a one-time password</p>
     <div class="otp-input-wrap">
-      <input type="email" id="otpEmail" class="otp-email-input" placeholder="yourname@wiom.in" autocomplete="off"/>
+      <input type="text" id="otpEmail" class="otp-email-input" placeholder="yourname@wiom.in" autocomplete="off" onkeydown="if(event.key==='Enter')sendOTP()"/>
     </div>
-    <button class="btn-login btn-login-user" onclick="sendOTP()" style="max-width:320px;margin-top:6px;">
+    <button type="button" class="btn-login btn-login-user" onclick="sendOTP()" style="max-width:320px;margin-top:6px;">
       📨 Send OTP
     </button>
+    <div id="otpEmailError" style="color:#e94560;font-size:13px;margin-top:8px;min-height:20px;"></div>
     <p class="otp-hint">OTP will be sent to your registered email ID</p>
   </div>
 
@@ -931,13 +932,18 @@ function setMinDate(fromId, toId) {
 let _otpCode = '', _otpUser = null, _otpTimer = null;
 
 function sendOTP() {
+  const errDiv = document.getElementById('otpEmailError');
+  if (errDiv) errDiv.textContent = '';
   const email = document.getElementById('otpEmail').value.trim().toLowerCase();
-  if (!email) { showToast('Please enter your email address','error'); return; }
+  if (!email) {
+    if (errDiv) errDiv.textContent = '⚠️ Please enter your email address';
+    return;
+  }
 
   // Find user by email
   const user = USERS.find(u => u.email.toLowerCase() === email);
   if (!user) {
-    showToast('❌ Email not registered. Contact Travel Desk.','error');
+    if (errDiv) errDiv.textContent = '❌ Email not registered: ' + email;
     return;
   }
 
