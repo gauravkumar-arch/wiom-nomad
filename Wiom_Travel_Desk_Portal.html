@@ -945,7 +945,14 @@ function sendOTP() {
   _otpCode = String(Math.floor(100000 + Math.random() * 900000));
   _otpUser = user;
 
-  // Send OTP via Slack (DM or channel)
+  // Switch to OTP entry screen immediately
+  document.getElementById('otpStep1').style.display = 'none';
+  document.getElementById('otpStep2').style.display = 'block';
+  // Show OTP on screen right away — always visible
+  document.getElementById('otpSentTo').innerHTML =
+    `Your OTP: <strong style="font-size:26px;letter-spacing:6px;color:#e94560;display:inline-block;margin-top:4px;">${_otpCode}</strong><br><small style="color:#888;font-size:12px;">Also sending via Slack DM...</small>`;
+
+  // Try Slack in background (optional — OTP already on screen)
   fetch('/api/slack/send-otp', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -953,21 +960,9 @@ function sendOTP() {
   }).then(r=>r.json()).then(d=>{
     if (d.ok) {
       document.getElementById('otpSentTo').innerHTML =
-        `OTP sent to <strong>${email}</strong> via <strong>Slack DM</strong> 💬`;
-    } else {
-      // Slack failed — show OTP directly on screen (internal use only)
-      document.getElementById('otpSentTo').innerHTML =
-        `⚠️ Slack DM unavailable. Your OTP: <strong style="font-size:22px;letter-spacing:4px;color:#e94560;">${_otpCode}</strong>`;
+        `Your OTP: <strong style="font-size:26px;letter-spacing:6px;color:#e94560;display:inline-block;margin-top:4px;">${_otpCode}</strong><br><small style="color:#27ae60;font-size:12px;">✓ Also sent via Slack DM</small>`;
     }
-  }).catch(()=>{
-    document.getElementById('otpSentTo').innerHTML =
-      `⚠️ Slack unreachable. Your OTP: <strong style="font-size:22px;letter-spacing:4px;color:#e94560;">${_otpCode}</strong>`;
-  });
-
-  // Switch to OTP entry screen
-  document.getElementById('otpStep1').style.display = 'none';
-  document.getElementById('otpStep2').style.display = 'block';
-  document.getElementById('otpSentTo').innerHTML = `Sending OTP to <strong>${email}</strong> via Slack... 💬`;
+  }).catch(()=>{});
 
   // Clear digit fields
   ['od1','od2','od3','od4','od5','od6'].forEach(id => {
