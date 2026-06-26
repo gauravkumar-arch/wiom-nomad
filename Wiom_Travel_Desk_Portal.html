@@ -525,7 +525,7 @@
     </button>
     <div id="otpEmailError" style="color:#e94560;font-size:13px;margin-top:8px;min-height:20px;"></div>
     <p class="otp-hint">OTP will be sent to your Slack DM</p>
-    <p style="color:rgba(255,255,255,0.15);font-size:10px;margin-top:12px;">v3.0 — Jun 25</p>
+    <p style="color:rgba(255,255,255,0.15);font-size:10px;margin-top:12px;">v3.1 — Jun 26</p>
   </div>
 
   <!-- ── STEP 2: OTP Verify ── -->
@@ -964,19 +964,21 @@ function sendOTP() {
   _otpCode = String(Math.floor(100000 + Math.random() * 900000));
   _otpUser = user;
 
-  // Switch screen — show loading state, never reveal OTP on screen
+  // Switch screen immediately — inputs always enabled
   document.getElementById('otpStep1').style.display = 'none';
   document.getElementById('otpStep2').style.display = 'block';
   document.getElementById('otpSentTo').innerHTML =
     `<span style="color:#f6ad55;font-size:14px;">📤 Sending OTP to your Slack DM...</span>`;
 
-  // Disable digit inputs until OTP is confirmed sent
+  // Clear and enable inputs immediately so user is never blocked
   ['od1','od2','od3','od4','od5','od6'].forEach(id => {
     const el = document.getElementById(id);
-    if(el){ el.value=''; el.classList.remove('filled'); el.disabled = true; }
+    if(el){ el.value=''; el.classList.remove('filled'); el.disabled = false; }
   });
+  const first = document.getElementById('od1'); if(first) first.focus();
+  startOTPTimer(600);
 
-  // Send OTP via Slack — wait for confirmation before enabling entry
+  // Send OTP via Slack in background — only updates status message
   fetch('/api/slack/send-otp', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ email, otp: _otpCode, name: user.name })
@@ -984,18 +986,13 @@ function sendOTP() {
     if (d.ok) {
       document.getElementById('otpSentTo').innerHTML =
         `<span style="color:#27ae60;font-size:14px;">✅ OTP sent to your Slack DM</span><br><small style="color:#aaa;font-size:12px;">Check Slack → Apps → Wiom Pravash</small>`;
-      ['od1','od2','od3','od4','od5','od6'].forEach(id => {
-        const el = document.getElementById(id); if(el) el.disabled = false;
-      });
-      const first = document.getElementById('od1'); if(first) first.focus();
-      startOTPTimer(600);
     } else {
       document.getElementById('otpSentTo').innerHTML =
-        `<span style="color:#e94560;font-size:14px;">❌ Could not send OTP via Slack</span><br><small style="color:#aaa;font-size:12px;">Contact Travel Desk admin to add your Slack account</small>`;
+        `<span style="color:#e94560;font-size:14px;">❌ Could not send via Slack — contact admin</span>`;
     }
   }).catch(()=>{
     document.getElementById('otpSentTo').innerHTML =
-      `<span style="color:#e94560;font-size:14px;">❌ Network error — could not send OTP</span><br><small style="color:#aaa;font-size:12px;">Check your connection and try again</small>`;
+      `<span style="color:#e94560;font-size:14px;">❌ Network error sending OTP</span>`;
   });
 }
 
