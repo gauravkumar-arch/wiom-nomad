@@ -47,6 +47,36 @@ app.get('/api/slack/whoami', async (req, res) => {
   res.json(r);
 });
 
+app.get('/api/slack/test-dm', async (req, res) => {
+  const email = req.query.email || 'gaurav.kumar@wiom.in';
+  if (!SLACK_BOT_TOKEN) return res.json({ ok: false, step: 'token', error: 'No bot token' });
+
+  // Step 1: lookup user
+  const userRes = await slackAPI('users.lookupByEmail', { email }, 'GET').catch(e => ({ ok: false, error: e.message }));
+  if (!userRes?.ok) return res.json({ ok: false, step: 'lookup', error: userRes?.error, email });
+  const userId = userRes.user.id;
+  const userName = userRes.user.real_name || userRes.user.name;
+
+  // Step 2: open DM
+  const dmRes = await slackAPI('conversations.open', { users: userId }).catch(e => ({ ok: false, error: e.message }));
+  if (!dmRes?.ok) return res.json({ ok: false, step: 'open_dm', error: dmRes?.error, userId });
+  const channelId = dmRes.channel.id;
+
+  // Step 3: send test message
+  const msgRes = await slackAPI('chat.postMessage', {
+    channel: channelId,
+    text: `🔔 *Test message from Wiom Pravash*\nIf you can see this, Slack DM is working!\nEmail: ${email}`
+  }).catch(e => ({ ok: false, error: e.message }));
+
+  res.json({
+    ok: msgRes?.ok,
+    step: msgRes?.ok ? 'delivered' : 'postMessage',
+    email, userId, userName, channelId,
+    messageTs: msgRes?.ts,
+    error: msgRes?.error || null
+  });
+});
+
 // ── Slack: Send plain DM notification ──
 app.post('/api/slack/notify', async (req, res) => {
   const { text, email } = req.body;
