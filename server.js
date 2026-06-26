@@ -41,6 +41,12 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/api/slack/whoami', async (req, res) => {
+  if (!SLACK_BOT_TOKEN) return res.json({ ok: false, error: 'No bot token' });
+  const r = await slackAPI('auth.test', {}, 'GET').catch(e => ({ ok: false, error: e.message }));
+  res.json(r);
+});
+
 // ── Slack: Send plain DM notification ──
 app.post('/api/slack/notify', async (req, res) => {
   const { text, email } = req.body;
