@@ -525,7 +525,7 @@
     </button>
     <div id="otpEmailError" style="color:#e94560;font-size:13px;margin-top:8px;min-height:20px;"></div>
     <p class="otp-hint">OTP will be sent to your Slack DM</p>
-    <p style="color:rgba(255,255,255,0.15);font-size:10px;margin-top:12px;">v3.1 — Jun 26</p>
+    <p style="color:rgba(255,255,255,0.15);font-size:10px;margin-top:12px;">v3.2 — Jun 26</p>
   </div>
 
   <!-- ── STEP 2: OTP Verify ── -->
@@ -880,6 +880,18 @@ let chartInstances = {};
 
 // ═══ INIT ═══
 function init() {
+  // Load Keka-synced users from localStorage if available
+  try {
+    const kekaUsers = localStorage.getItem('wiom_keka_users');
+    if (kekaUsers) {
+      const parsed = JSON.parse(kekaUsers);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        USERS.length = 0;
+        parsed.forEach(u => USERS.push(u));
+      }
+    }
+  } catch(e) { /* keep default USERS */ }
+
   let stored = null;
   try {
     stored = localStorage.getItem('wiom_travel_v4');
@@ -909,6 +921,41 @@ function resetDemo() {
   localStorage.removeItem('wiom_travel_v4');
   requests = JSON.parse(JSON.stringify(SEED));
   save(); secTab='pending'; render();
+}
+
+// ═══ KEKA HRMS SYNC ═══
+function kekaSyncUsers() {
+  const btn = document.getElementById('kekaSyncBtn');
+  if (btn) { btn.textContent = '⏳ Syncing...'; btn.disabled = true; }
+
+  fetch('/api/keka/sync')
+    .then(r => r.json())
+    .then(data => {
+      if (btn) { btn.textContent = '🔄 Sync from Keka'; btn.disabled = false; }
+      if (!data.ok) {
+        showToast('❌ Keka sync failed: ' + data.error, 'error');
+        return;
+      }
+
+      // Keep travel_desk users from existing USERS, merge Keka employees
+      const tdUsers = USERS.filter(u => u.role === 'travel_desk');
+      const kekaUsers = data.users.filter(u => u.role !== 'travel_desk');
+
+      // Merge: Keka data replaces old non-TD users; keep TD users
+      USERS.length = 0;
+      kekaUsers.forEach(u => USERS.push(u));
+      tdUsers.forEach(u => { if (!USERS.find(x => x.email === u.email)) USERS.push(u); });
+
+      // Persist to localStorage so it survives page refresh
+      localStorage.setItem('wiom_keka_users', JSON.stringify(USERS));
+
+      showToast(`✅ Keka sync done — ${kekaUsers.length} employees loaded`, 'success');
+      render();
+    })
+    .catch(e => {
+      if (btn) { btn.textContent = '🔄 Sync from Keka'; btn.disabled = false; }
+      showToast('❌ Network error during Keka sync', 'error');
+    });
 }
 
 // ═══ LOGIN ═══
@@ -1431,6 +1478,7 @@ function renderTravelDesk(c) {
       <div class="header-actions">
         <button class="btn-primary" onclick="openNewReq()">✈️ New Travel Request</button>
         <button class="btn-export" onclick="exportCSV()">📤 Export CSV</button>
+        <button class="btn-export" onclick="kekaSyncUsers()" id="kekaSyncBtn" style="background:#6c5ce7;color:#fff;border:none;">🔄 Sync from Keka</button>
       </div>
     </div>
     <div class="stats-row">

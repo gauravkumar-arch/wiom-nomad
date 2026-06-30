@@ -4,8 +4,134 @@ const https = require('https');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
-const SLACK_BOT_TOKEN   = process.env.SLACK_BOT_TOKEN   || '';
+const SLACK_WEBHOOK_URL  = process.env.SLACK_WEBHOOK_URL  || '';
+const SLACK_BOT_TOKEN    = process.env.SLACK_BOT_TOKEN    || '';
+
+// ── KEKA HRMS INTEGRATION ──
+const KEKA_CLIENT_ID     = process.env.KEKA_CLIENT_ID     || '';
+const KEKA_CLIENT_SECRET = process.env.KEKA_CLIENT_SECRET || '';
+const KEKA_API_KEY       = process.env.KEKA_API_KEY       || '';
+const KEKA_TENANT        = process.env.KEKA_TENANT        || 'omniainformation';
+
+let _kekaToken = null;
+let _kekaTokenExpiry = 0;
+
+async function kekaGetToken() {
+  if (_kekaToken && Date.now() < _kekaTokenExpiry) return _kekaToken;
+  const body = new URLSearchParams({
+    grant_type: 'kekaapi', scope: 'kekaapi',
+    client_id: KEKA_CLIENT_ID, client_secret: KEKA_CLIENT_SECRET, api_key: KEKA_API_KEY
+  }).toString();
+  const result = await new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'login.keka.com', path: '/connect/token', method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'user-agent': 'Mozilla', 'Content-Length': Buffer.byteLength(body) }
+    }, res => { let d=''; res.on('data',c=>d+=c); res.on('end',()=>{ try{resolve(JSON.parse(d));}catch{resolve({error:d});} }); });
+    req.on('error', reject); req.write(body); req.end();
+  });
+  if (!result.access_token) throw new Error('Keka auth failed: ' + (result.error_description || result.error || JSON.stringify(result)));
+  _kekaToken = result.access_token;
+  _kekaTokenExpiry = Date.now() + ((result.expires_in || 3600) * 1000) - 60000;
+  return _kekaToken;
+}
+
+async function kekaGET(path, token) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: `${KEKA_TENANT}.keka.com`, path: `/api/v1${path}`, method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'user-agent': 'Mozilla' }
+    }, res => { let d=''; res.on('data',c=>d+=c); res.on('end',()=>{ try{resolve(JSON.parse(d));}catch{resolve({error:d});} }); });
+    req.on('error', reject); req.end();
+  });
+}
+
+async function kekaFetchAll(path, token) {
+  const items = []; let page = 1;
+  while (true) {
+    const sep = path.includes('?') ? '&' : '?';
+    const res = await kekaGET(`${path}${sep}pageNumber=${page}&pageSize=200`, token);
+    if (!Array.isArray(res.items) || res.items.length === 0) break;
+    items.push(...res.items);
+    if (!res.nextPage || page >= res.totalPages) break;
+    page++;
+  }
+  return items;
+}
+
+async function kekaBuildUsers() {
+  const token = await kekaGetToken();
+  const [employees, departments] = await Promise.all([
+    kekaFetchAll('/hris/employees?employmentStatus=Working', token),
+    kekaFetchAll('/hris/departments', token)
+  ]);
+
+  // Build dept-head email set + dept-head → dept name map
+  const deptHeadEmails = new Set();
+  const emailToDept = {};
+  const deptHeadName = {};
+  departments.forEach(dept => {
+    (dept.departmentHeads || []).forEach(h => {
+      if (!h.email) return;
+      const e = h.email.toLowerCase();
+      deptHeadEmails.add(e);
+      emailToDept[e] = dept.name;
+    });
+  });
+
+  // Build manager email set (anyone who is a reportsTo)
+  const managerEmails = new Set();
+  employees.forEach(emp => {
+    if (emp.reportsTo?.email) managerEmails.add(emp.reportsTo.email.toLowerCase());
+  });
+
+  // Build email → dept head name map for function_head lookup
+  employees.forEach(emp => {
+    const empEmail = emp.email?.toLowerCase();
+    if (!empEmail) return;
+    const dept = (emp.groups || []).find(g => g.groupType === 2)?.name;
+    if (!dept) return;
+    const deptObj = departments.find(d => d.name === dept);
+    const fh = deptObj?.departmentHeads?.[0];
+    if (fh) deptHeadName[empEmail] = `${fh.firstName||''} ${fh.lastName||''}`.trim();
+  });
+
+  // Map to portal user format — skip if no email
+  const TRAVEL_DESK_EMAILS = ['gaurav.kumar@wiom.in', 'gaurav.singh@wiom.in'];
+  return employees
+    .filter(emp => emp.email)
+    .map(emp => {
+      const email  = emp.email.toLowerCase();
+      const name   = emp.displayName || `${emp.firstName||''} ${emp.lastName||''}`.trim();
+      const dept   = (emp.groups || []).find(g => g.groupType === 2)?.name || 'General';
+      const mgr    = emp.reportsTo ? `${emp.reportsTo.firstName||''} ${emp.reportsTo.lastName||''}`.trim() : '';
+      const fhName = deptHeadName[email] || '';
+      let role = 'employee';
+      if (TRAVEL_DESK_EMAILS.includes(email))  role = 'travel_desk';
+      else if (deptHeadEmails.has(email))       role = 'function_head';
+      else if (managerEmails.has(email))        role = 'manager';
+      return {
+        id: emp.id || emp.employeeNumber || email,
+        name, email, dept, role,
+        manager: mgr, functionHead: fhName,
+        initials: name.split(' ').filter(Boolean).map(w=>w[0].toUpperCase()).join('').slice(0,2)
+      };
+    });
+}
+
+// ── Keka: Full sync endpoint ──
+app.get('/api/keka/sync', async (req, res) => {
+  if (!KEKA_CLIENT_ID || !KEKA_CLIENT_SECRET || !KEKA_API_KEY) {
+    return res.json({ ok: false, error: 'Keka credentials not set. Add KEKA_CLIENT_ID, KEKA_CLIENT_SECRET, KEKA_API_KEY in Railway variables.' });
+  }
+  try {
+    const users = await kekaBuildUsers();
+    console.log(`[Keka] Synced ${users.length} users`);
+    res.json({ ok: true, users, count: users.length, synced_at: new Date().toISOString() });
+  } catch(e) {
+    console.log('[Keka] sync error:', e.message);
+    res.json({ ok: false, error: e.message });
+  }
+});
 
 // ── USERS (needed server-side for Slack interactive approval DMs) ──
 const USERS_DATA = [
