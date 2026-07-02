@@ -135,17 +135,162 @@ app.get('/api/keka/sync', async (req, res) => {
 
 // ── USERS (needed server-side for Slack interactive approval DMs) ──
 const USERS_DATA = [
-  { id:'U010', name:'Sneha Ghildiyal',     email:'sneha.ghildiyal@wiom.in',     role:'employee' },
-  { id:'U011', name:'Sajan Kumar',         email:'sajan.kumar@wiom.in',          role:'employee' },
-  { id:'U012', name:'Pramod',              email:'pramod@wiom.in',               role:'employee' },
-  { id:'U013', name:'Devashish Mukherjee', email:'devashish.mukherjee@wiom.in',  role:'manager'  },
-  { id:'U014', name:'Garima Makkar',       email:'garima.makkar@wiom.in',        role:'function_head' },
-  { id:'U009', name:'Gaurav Singh',        email:'gaurav.singh@wiom.in',         role:'travel_desk' },
+  { id:'U010', name:'Sneha Ghildiyal',     email:'sneha.ghildiyal@wiom.in',     dept:'HR',    role:'employee',      manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'SG' },
+  { id:'U011', name:'Sajan Kumar',         email:'sajan.kumar@wiom.in',          dept:'HR',    role:'employee',      manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'SK' },
+  { id:'U012', name:'Pramod',              email:'pramod@wiom.in',               dept:'HR',    role:'employee',      manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'P'  },
+  { id:'U013', name:'Devashish Mukherjee', email:'devashish.mukherjee@wiom.in',  dept:'HR',    role:'manager',       functionHead:'Garima Makkar', initials:'DM' },
+  { id:'U014', name:'Garima Makkar',       email:'garima.makkar@wiom.in',        dept:'HR',    role:'function_head', initials:'GM' },
+  { id:'U009', name:'Gaurav Singh',        email:'gaurav.singh@wiom.in',         dept:'Admin', role:'travel_desk',   manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'GS' },
+  { id:'U015', name:'Gaurav Kumar',        email:'gaurav.kumar@wiom.in',         dept:'Admin', role:'travel_desk',   manager:'Devashish Mukherjee', functionHead:'Garima Makkar', initials:'GK' },
 ];
 
 // ── In-memory store for Slack interactive approval flow ──
 const pendingApprovals = new Map();  // reqId → { req, employeeEmail }
 const slackUpdates     = [];         // browser picks these up on next portal load
+
+// ── SLACK CHATBOT: Travel requests submitted via bot ──
+const SLACK_REQUESTS = new Map();   // reqId → full request object
+let _botSeq = 100;
+function nextBotReqId() { return `REQ-B${String(++_botSeq).padStart(3,'0')}`; }
+
+async function resolveSlackUser(slackUserId) {
+  const r = await slackAPI(`users.info?user=${slackUserId}`, {}, 'GET').catch(() => null);
+  const email = r?.user?.profile?.email?.toLowerCase();
+  return USERS_DATA.find(u => u.email.toLowerCase() === email) || null;
+}
+
+function buildTravelModal(triggerId) {
+  return {
+    trigger_id: triggerId,
+    view: {
+      type: 'modal',
+      callback_id: 'travel_form_submit',
+      title: { type: 'plain_text', text: '✈️ New Travel Request' },
+      submit: { type: 'plain_text', text: 'Submit Request' },
+      close: { type: 'plain_text', text: 'Cancel' },
+      blocks: [
+        {
+          type: 'input', block_id: 'b_purpose',
+          label: { type: 'plain_text', text: '📋 Purpose of Travel' },
+          element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Client meeting in Mumbai' } }
+        },
+        {
+          type: 'input', block_id: 'b_from',
+          label: { type: 'plain_text', text: '📍 From City' },
+          element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Delhi' } }
+        },
+        {
+          type: 'input', block_id: 'b_to',
+          label: { type: 'plain_text', text: '📍 To City' },
+          element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Bangalore' } }
+        },
+        {
+          type: 'input', block_id: 'b_date',
+          label: { type: 'plain_text', text: '📅 Travel Date' },
+          element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Pick a date' } }
+        },
+        {
+          type: 'input', block_id: 'b_modes',
+          label: { type: 'plain_text', text: '🚀 Mode of Travel' },
+          element: {
+            type: 'checkboxes', action_id: 'val',
+            options: [
+              { text: { type: 'plain_text', text: '✈️ Flight' }, value: 'Flight' },
+              { text: { type: 'plain_text', text: '🚂 Train' },  value: 'Train'  },
+              { text: { type: 'plain_text', text: '🚌 Bus' },    value: 'Bus'    },
+              { text: { type: 'plain_text', text: '🏨 Hotel' },  value: 'Hotel'  }
+            ]
+          }
+        },
+        {
+          type: 'input', block_id: 'b_priority',
+          label: { type: 'plain_text', text: '⚡ Priority' },
+          element: {
+            type: 'static_select', action_id: 'val',
+            initial_option: { text: { type: 'plain_text', text: '📋 Normal' }, value: 'Normal' },
+            options: [
+              { text: { type: 'plain_text', text: '📋 Normal' },    value: 'Normal'    },
+              { text: { type: 'plain_text', text: '⚡ Urgent' },    value: 'Urgent'    },
+              { text: { type: 'plain_text', text: '🚨 Emergency' }, value: 'Emergency' }
+            ]
+          }
+        },
+        {
+          type: 'input', block_id: 'b_notes', optional: true,
+          label: { type: 'plain_text', text: '📝 Notes (Optional)' },
+          element: { type: 'plain_text_input', action_id: 'val', multiline: true, placeholder: { type: 'plain_text', text: 'Any special requirements...' } }
+        }
+      ]
+    }
+  };
+}
+
+async function openBotDM(userId) {
+  const r = await slackAPI('conversations.open', { users: userId });
+  return r?.channel?.id || null;
+}
+
+async function sendBotStatus(userId) {
+  const user = await resolveSlackUser(userId);
+  const ch   = await openBotDM(userId);
+  if (!ch) return;
+  if (!user) {
+    return slackAPI('chat.postMessage', { channel: ch, text: '❌ Your email is not registered in Wiom Pravash. Contact Travel Desk: gaurav.kumar@wiom.in' });
+  }
+  const myReqs = [...SLACK_REQUESTS.values()].filter(r => r.employeeEmail === user.email).slice(-5).reverse();
+  if (myReqs.length === 0) {
+    return slackAPI('chat.postMessage', { channel: ch, text: '📋 You have no travel requests yet. Type `/travel` to submit one.' });
+  }
+  const emo = { PENDING_MANAGER:'🔶', PENDING_FUNCTION_HEAD:'🔷', PENDING_TRAVEL_DESK:'🟣', PROCESSED:'✅', REJECTED:'❌' };
+  const lbl = { PENDING_MANAGER:'Pending Manager', PENDING_FUNCTION_HEAD:'Pending Function Head', PENDING_TRAVEL_DESK:'Pending Booking', PROCESSED:'Booked ✅', REJECTED:'Rejected ❌' };
+  const blocks = [
+    { type:'header', text:{ type:'plain_text', text:'✈️ Your Travel Requests' } },
+    { type:'divider' }
+  ];
+  myReqs.forEach(r => {
+    blocks.push({ type:'section', text:{ type:'mrkdwn', text:`*${r.id}* — ${emo[r.status]||'🔶'} ${lbl[r.status]||r.status}\n:round_pushpin: ${r.fromCity} → ${r.toCity}  :calendar: ${r.travelDate}\n:dart: ${r.purpose}  :zap: ${r.priority}` } });
+    blocks.push({ type:'divider' });
+  });
+  return slackAPI('chat.postMessage', { channel: ch, blocks, text: 'Your travel requests' });
+}
+
+async function sendBotHelp(userId) {
+  const ch = await openBotDM(userId);
+  if (!ch) return;
+  return slackAPI('chat.postMessage', {
+    channel: ch,
+    blocks: [
+      { type:'header', text:{ type:'plain_text', text:'✈️ Wiom Pravash — Travel Bot' } },
+      { type:'section', text:{ type:'mrkdwn', text:'*Slash Commands:*\n`/travel` or `/travel new` — Submit a new travel request\n`/travel status` — View your current requests\n`/travel help` — Show this message' } },
+      { type:'divider' },
+      { type:'section', text:{ type:'mrkdwn', text:'*You can also DM me directly:*\nSay `new`, `status`, or `help`' } },
+      { type:'divider' },
+      { type:'section', text:{ type:'mrkdwn', text:':globe_with_meridians: *Web Portal:* https://wiom-pravash-production.up.railway.app' } }
+    ],
+    text: 'Wiom Pravash Travel Bot Help'
+  });
+}
+
+async function notifyApprover(approverEmail, reqId, req, stage) {
+  const stageLabel = stage === 'manager' ? 'Manager Review' : 'Final Approval (Function Head)';
+  const approveId  = stage === 'manager' ? 'bot_mgr_ok'  : 'bot_fh_ok';
+  const rejectId   = stage === 'manager' ? 'bot_mgr_no'  : 'bot_fh_no';
+  const modes      = (req.types || []).join(', ') || '—';
+  const text       = `:airplane: *New Travel Request — ${stageLabel}* — \`${reqId}\`\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:calendar: *Date:* ${req.travelDate}\n:rocket: *Mode:* ${modes}\n:zap: *Priority:* ${req.priority}${req.notes ? '\n:notepad_spiral: *Notes:* ' + req.notes : ''}`;
+  return dmUser(approverEmail, {
+    text,
+    blocks: [
+      { type:'section', text:{ type:'mrkdwn', text } },
+      {
+        type:'actions', block_id:`botapproval_${reqId}`,
+        elements: [
+          { type:'button', text:{ type:'plain_text', text:'✅ Approve' }, style:'primary', action_id:approveId, value:reqId },
+          { type:'button', text:{ type:'plain_text', text:'❌ Reject' },  style:'danger',  action_id:rejectId,  value:reqId }
+        ]
+      }
+    ]
+  });
+}
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));  // needed for Slack action payloads
@@ -260,6 +405,27 @@ app.post('/api/requests/updates/ack', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Slack: Slash command /travel ──
+app.post('/slack/commands', (req, res) => {
+  const { trigger_id, user_id, text = '' } = req.body;
+  const sub = (text || '').trim().toLowerCase();
+
+  res.status(200).end(); // Acknowledge immediately (Slack requires < 3s)
+
+  if (!SLACK_BOT_TOKEN) return;
+
+  if (!sub || sub === 'new' || sub === 'request') {
+    // Open modal — trigger_id expires in 3s so call immediately (don't await first)
+    slackAPI('views.open', buildTravelModal(trigger_id))
+      .then(r => { if (!r?.ok) { console.log('[/travel] views.open failed:', r?.error); sendBotHelp(user_id).catch(()=>{}); } })
+      .catch(e => console.log('[/travel] views.open error:', e.message));
+  } else if (sub === 'status' || sub === 'mystatus') {
+    sendBotStatus(user_id).catch(e => console.log('[/travel status] error:', e.message));
+  } else {
+    sendBotHelp(user_id).catch(e => console.log('[/travel help] error:', e.message));
+  }
+});
+
 // ── Slack Interactive Components webhook ──
 app.post('/slack/actions', async (req, res) => {
   // URL verification challenge (Slack sends JSON)
@@ -268,6 +434,75 @@ app.post('/slack/actions', async (req, res) => {
   let payload;
   try { payload = JSON.parse(req.body.payload); } catch(e) { return res.status(200).end(); }
   if (payload?.type === 'url_verification') return res.json({ challenge: payload.challenge });
+
+  // ── Handle modal form submission ──
+  if (payload?.type === 'view_submission') {
+    res.json({}); // Empty response closes the modal
+
+    if (payload.view?.callback_id !== 'travel_form_submit') return;
+
+    const v = payload.view.state.values;
+    const slackUser = payload.user;
+    const user = await resolveSlackUser(slackUser.id).catch(() => null);
+    const ch   = await openBotDM(slackUser.id).catch(() => null);
+
+    if (!user) {
+      if (ch) await slackAPI('chat.postMessage', { channel: ch, text: '❌ Your email is not registered in Wiom Pravash. Contact Travel Desk: gaurav.kumar@wiom.in' });
+      return;
+    }
+
+    const purpose    = v.b_purpose?.val?.value || '';
+    const fromCity   = v.b_from?.val?.value    || '';
+    const toCity     = v.b_to?.val?.value      || '';
+    const travelDate = v.b_date?.val?.selected_date || '';
+    const modes      = (v.b_modes?.val?.selected_options  || []).map(o => o.value);
+    const priority   = v.b_priority?.val?.selected_option?.value || 'Normal';
+    const notes      = v.b_notes?.val?.value   || '';
+
+    const reqId = nextBotReqId();
+    const today = new Date().toISOString().split('T')[0];
+
+    const hasManager = !!user.manager;
+    const initStatus = hasManager ? 'PENDING_MANAGER' : 'PENDING_FUNCTION_HEAD';
+
+    const request = {
+      id: reqId, source: 'slack',
+      employeeId: user.id, employeeName: user.name, employeeEmail: user.email,
+      employeeSlackId: slackUser.id,
+      dept: user.dept, manager: user.manager || '', functionHead: user.functionHead || '',
+      purpose, fromCity, toCity, travelDate, types: modes, priority, notes,
+      status: initStatus, createdAt: today
+    };
+
+    SLACK_REQUESTS.set(reqId, request);
+
+    // Confirm to employee
+    if (ch) await slackAPI('chat.postMessage', {
+      channel: ch,
+      blocks: [
+        { type:'header', text:{ type:'plain_text', text:'✅ Travel Request Submitted!' } },
+        { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}\n*Priority:* ${priority}\n*Status:* ${hasManager ? '🔶 Pending Manager Approval' : '🔷 Pending Function Head Approval'}` } },
+        { type:'section', text:{ type:'mrkdwn', text:'You will be notified at each step. Use `/travel status` to check anytime.' } }
+      ],
+      text: `Travel request ${reqId} submitted!`
+    });
+
+    // Notify first approver
+    if (hasManager) {
+      const mgrUser = USERS_DATA.find(u => u.name === user.manager);
+      if (mgrUser?.email) await notifyApprover(mgrUser.email, reqId, request, 'manager');
+      else {
+        // No manager found, skip to function head
+        const fhUser = USERS_DATA.find(u => u.name === user.functionHead);
+        if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
+      }
+    } else {
+      const fhUser = USERS_DATA.find(u => u.name === user.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
+      if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
+    }
+    return;
+  }
+
   if (payload?.type !== 'block_actions') return res.status(200).end();
 
   // Respond immediately — Slack requires reply within 3 seconds
@@ -280,10 +515,88 @@ app.post('/slack/actions', async (req, res) => {
 
   const actionId = action.action_id;
   const reqId    = action.value;
-  const stored   = pendingApprovals.get(reqId);
-  // Resolve full name: match Slack username to USERS_DATA email prefix
+  const today    = new Date().toISOString().split('T')[0];
+
+  // Resolve approver name
   const _matchedUser = USERS_DATA.find(u => u.email.split('@')[0] === slackUser.name);
   const byName = _matchedUser?.name || slackUser.real_name || slackUser.name || 'Approver';
+
+  // ── Bot chatbot approval actions ──
+  if (actionId === 'bot_mgr_ok' || actionId === 'bot_mgr_no') {
+    const request = SLACK_REQUESTS.get(reqId);
+    if (!request) {
+      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`⚠️ *${reqId}* — Request not found (may have been restarted).` }).catch(()=>{});
+      return;
+    }
+
+    if (actionId === 'bot_mgr_ok') {
+      request.status = 'PENDING_FUNCTION_HEAD';
+      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:white_check_mark: *${reqId}* — Manager approved by ${byName}. Forwarded to Function Head.` }).catch(()=>{});
+
+      // Notify employee of manager approval
+      await dmUser(request.employeeEmail, { text:`:white_check_mark: *Manager Approved* — \`${reqId}\`\nYour travel request has been approved by *${byName}* (Manager) and forwarded to the Function Head for final approval.` });
+
+      // Notify function head
+      const fhUser = USERS_DATA.find(u => u.name === request.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
+      if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
+
+    } else {
+      request.status = 'REJECTED';
+      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:x: *${reqId}* — Rejected by ${byName} (Manager).` }).catch(()=>{});
+      await dmUser(request.employeeEmail, { text:`:x: *Travel Request Rejected* — \`${reqId}\`\nYour request was rejected by *${byName}* (Manager).\n:round_pushpin: Route: ${request.fromCity} → ${request.toCity}  :calendar: ${request.travelDate}\nContact your manager for details.` });
+    }
+    return;
+  }
+
+  if (actionId === 'bot_fh_ok' || actionId === 'bot_fh_no') {
+    const request = SLACK_REQUESTS.get(reqId);
+    if (!request) {
+      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`⚠️ *${reqId}* — Request not found.` }).catch(()=>{});
+      return;
+    }
+
+    if (actionId === 'bot_fh_ok') {
+      request.status = 'PENDING_TRAVEL_DESK';
+      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:white_check_mark: *${reqId}* — Final approval by ${byName}. Travel Desk notified.` }).catch(()=>{});
+
+      // Notify Travel Desk
+      const tdUser = USERS_DATA.find(u => u.role === 'travel_desk');
+      const modes  = (request.types || []).join(' + ') || '—';
+      await dmUser(tdUser?.email || '', { text:`:ticket: *Book Tickets — ${reqId}*\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity} → ${request.toCity}\n:calendar: *Date:* ${request.travelDate}\n:airplane: *Mode:* ${modes}\n:zap: *Priority:* ${request.priority}\n:white_check_mark: *Approved by:* ${byName} (Function Head)\n\nPlease book on MyBiz: https://mybiz.makemytrip.com` });
+
+      // Notify employee with booking links
+      const types = (request.types || []).map(t => t.toLowerCase());
+      const links = [];
+      if (types.includes('flight')) links.push(':airplane: *Flight:* https://mybiz.makemytrip.com/flights');
+      if (types.includes('train'))  links.push(':bullettrain_side: *Train:* https://mybiz.makemytrip.com/trains');
+      if (types.includes('bus'))    links.push(':bus: *Bus:* https://mybiz.makemytrip.com/bus');
+      if (types.includes('hotel'))  links.push(':hotel: *Hotel:* https://mybiz.makemytrip.com/hotels');
+      if (links.length === 0) links.push(':link: *Book here:* https://mybiz.makemytrip.com');
+      await dmUser(request.employeeEmail, { text:`:tada: *Fully Approved!* — \`${reqId}\`\n\nHi *${request.employeeName}*,\n\nYour travel request has been approved by *${byName}* (Function Head).\n\n:round_pushpin: *Route:* ${request.fromCity} → ${request.toCity}\n:calendar: *Date:* ${request.travelDate}\n:clipboard: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:dart: *Purpose:* ${request.purpose}\n\nTravel Desk is booking your tickets. You will receive booking details shortly.\n\n:link: *MyBiz Links:*\n${links.join('\n')}` });
+
+    } else {
+      request.status = 'REJECTED';
+      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:x: *${reqId}* — Rejected by ${byName} (Function Head).` }).catch(()=>{});
+      await dmUser(request.employeeEmail, { text:`:x: *Travel Request Rejected* — \`${reqId}\`\nYour request was rejected by *${byName}* (Function Head).\n:round_pushpin: Route: ${request.fromCity} → ${request.toCity}  :calendar: ${request.travelDate}\n:speech_balloon: Please speak with your Function Head for details.` });
+    }
+    return;
+  }
+
+  // ── App Home button: open travel modal ──
+  if (actionId === 'home_new_travel') {
+    const triggerId = payload.trigger_id;
+    if (triggerId) slackAPI('views.open', buildTravelModal(triggerId)).catch(e => console.log('[AppHome] views.open:', e.message));
+    return;
+  }
+
+  // ── App Home button: show my status ──
+  if (actionId === 'home_my_status') {
+    await sendBotStatus(slackUser.id).catch(e => console.log('[AppHome] status:', e.message));
+    return;
+  }
+
+  // ── Portal web-app approval (existing: approve_request / reject_request) ──
+  const stored = pendingApprovals.get(reqId);
 
   if (!stored) {
     if (responseUrl) await httpsPost(responseUrl, {
@@ -294,7 +607,6 @@ app.post('/slack/actions', async (req, res) => {
   }
 
   const { req: request, employeeEmail } = stored;
-  const today = new Date().toISOString().split('T')[0];
   const fhUser = USERS_DATA.find(u => u.role === 'function_head');
   const tdUser = USERS_DATA.find(u => u.role === 'travel_desk');
 
@@ -431,36 +743,27 @@ async function publishHomeView(userId) {
   const view = {
     type: 'home',
     blocks: [
+      { type:'header', text:{ type:'plain_text', text:'✈️ Wiom Pravash — Travel Portal', emoji:true } },
       {
-        type: 'header',
-        text: { type: 'plain_text', text: '✈️ Wiom Pravash — Travel Portal', emoji: true }
+        type:'section',
+        text:{ type:'mrkdwn', text:'*Welcome to Wiom Pravash!*\n\nSubmit and track your travel requests directly here in Slack, or use the web portal.' }
       },
       {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '*Welcome to Wiom Pravash!*\n\nSubmit and track your travel requests online.\nClick the button below to open the portal and login with your OTP.'
-        }
-      },
-      {
-        type: 'actions',
+        type:'actions',
         elements: [
-          {
-            type: 'button',
-            text: { type: 'plain_text', text: '🚀 Open Travel Portal', emoji: true },
-            url: 'https://wiom-pravash-production.up.railway.app',
-            action_id: 'open_portal',
-            style: 'primary'
-          }
+          { type:'button', text:{ type:'plain_text', text:'🆕 New Travel Request', emoji:true }, style:'primary', action_id:'home_new_travel' },
+          { type:'button', text:{ type:'plain_text', text:'📋 My Requests', emoji:true },         action_id:'home_my_status' }
         ]
       },
-      { type: 'divider' },
+      { type:'divider' },
       {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: ':link: *Portal URL:* https://wiom-pravash-production.up.railway.app\n:lock: *Login:* Use your work email — OTP will be sent to your Slack DM'
-        }
+        type:'section',
+        text:{ type:'mrkdwn', text:':keyboard: *Slash Commands:*\n`/travel` — Submit a new request\n`/travel status` — Check your requests\n`/travel help` — All commands' }
+      },
+      { type:'divider' },
+      {
+        type:'section',
+        text:{ type:'mrkdwn', text:':globe_with_meridians: *Web Portal:* https://wiom-pravash-production.up.railway.app\n:lock: *Login:* Use your work email — OTP sent to your Slack DM' }
       }
     ]
   };
@@ -472,8 +775,42 @@ app.post('/slack/events', async (req, res) => {
   const body = req.body;
   if (body?.type === 'url_verification') return res.json({ challenge: body.challenge });
   res.status(200).end();
-  if (body?.type === 'event_callback' && body.event?.type === 'app_home_opened') {
-    await publishHomeView(body.event.user).catch(e => console.log('[AppHome] Error:', e.message));
+
+  if (body?.type !== 'event_callback') return;
+  const ev = body.event;
+
+  if (ev?.type === 'app_home_opened') {
+    await publishHomeView(ev.user).catch(e => console.log('[AppHome] Error:', e.message));
+    return;
+  }
+
+  // Handle DMs to the bot (message.im events)
+  if ((ev?.type === 'message' || ev?.type === 'message.im') && !ev.bot_id && ev.user) {
+    const msg = (ev.text || '').trim().toLowerCase();
+    const userId = ev.user;
+    if (msg === 'new' || msg === 'travel' || msg === 'submit' || msg === 'request') {
+      // Can't open modal from message events — guide to slash command
+      const ch = await openBotDM(userId).catch(() => null);
+      if (ch) await slackAPI('chat.postMessage', {
+        channel: ch,
+        blocks: [
+          { type:'section', text:{ type:'mrkdwn', text:'To submit a new travel request, use the slash command:' } },
+          { type:'section', text:{ type:'mrkdwn', text:'> */travel*\nOr click the *🆕 New Travel Request* button in the App Home tab above.' } }
+        ],
+        text: 'Use /travel to submit a travel request'
+      });
+    } else if (msg === 'status' || msg === 'my requests' || msg === 'requests') {
+      await sendBotStatus(userId).catch(e => console.log('[DM status] error:', e.message));
+    } else if (msg === 'help' || msg === '?') {
+      await sendBotHelp(userId).catch(e => console.log('[DM help] error:', e.message));
+    } else if (msg) {
+      // Default: show help
+      const ch = await openBotDM(userId).catch(() => null);
+      if (ch) await slackAPI('chat.postMessage', {
+        channel: ch,
+        text: 'Hi! Type `help` to see available commands, or use `/travel` to submit a request.'
+      });
+    }
   }
 });
 
@@ -488,7 +825,7 @@ const APP_URL             = 'https://wiom-pravash-production.up.railway.app';
 
 // Step 1 — redirect user to Slack OAuth
 app.get('/slack-setup', (req, res) => {
-  const scopes = 'chat:write,im:write,users:read,users:read.email,incoming-webhook';
+  const scopes = 'chat:write,im:write,users:read,users:read.email,incoming-webhook,commands,views:write';
   const redirectUri = `${APP_URL}/slack/callback`;
   const url = `https://slack.com/oauth/v2/authorize?client_id=${SLACK_CLIENT_ID}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}`;
   res.redirect(url);
