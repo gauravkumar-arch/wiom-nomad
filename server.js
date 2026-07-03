@@ -246,8 +246,8 @@ async function sendBotStatus(userId) {
   if (myReqs.length === 0) {
     return slackAPI('chat.postMessage', { channel: ch, text: '📋 You have no travel requests yet. Type `/travel` to submit one.' });
   }
-  const emo = { PENDING_MANAGER:'🔶', PENDING_FUNCTION_HEAD:'🔷', PENDING_TRAVEL_DESK:'🟣', PROCESSED:'✅', REJECTED:'❌' };
-  const lbl = { PENDING_MANAGER:'Pending Manager', PENDING_FUNCTION_HEAD:'Pending Function Head', PENDING_TRAVEL_DESK:'Pending Booking', PROCESSED:'Booked ✅', REJECTED:'Rejected ❌' };
+  const emo = { PENDING_FUNCTION_HEAD:'🔷', PENDING_TRAVEL_DESK:'🟣', PROCESSED:'✅', REJECTED:'❌' };
+  const lbl = { PENDING_FUNCTION_HEAD:'Pending Function Head', PENDING_TRAVEL_DESK:'Pending Booking', PROCESSED:'Booked ✅', REJECTED:'Rejected ❌' };
   const blocks = [
     { type:'header', text:{ type:'plain_text', text:'✈️ Your Travel Requests' } },
     { type:'divider' }
@@ -468,16 +468,13 @@ app.post('/slack/actions', async (req, res) => {
     const reqId = nextBotReqId();
     const today = new Date().toISOString().split('T')[0];
 
-    const hasManager = !!user.manager;
-    const initStatus = hasManager ? 'PENDING_MANAGER' : 'PENDING_FUNCTION_HEAD';
-
     const request = {
       id: reqId, source: 'slack',
       employeeId: user.id, employeeName: user.name, employeeEmail: user.email,
       employeeSlackId: slackUser.id,
       dept: user.dept, manager: user.manager || '', functionHead: user.functionHead || '',
       purpose, fromCity, toCity, travelDate, returnDate, types: modes, priority, notes,
-      status: initStatus, createdAt: today
+      status: 'PENDING_FUNCTION_HEAD', createdAt: today
     };
 
     SLACK_REQUESTS.set(reqId, request);
@@ -487,25 +484,22 @@ app.post('/slack/actions', async (req, res) => {
       channel: ch,
       blocks: [
         { type:'header', text:{ type:'plain_text', text:'✅ Travel Request Submitted!' } },
-        { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}\n*Priority:* ${priority}\n*Status:* ${hasManager ? '🔶 Pending Manager Approval' : '🔷 Pending Function Head Approval'}` } },
-        { type:'section', text:{ type:'mrkdwn', text:'You will be notified at each step. Use `/travel status` to check anytime.' } }
+        { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}\n*Priority:* ${priority}\n*Status:* 🔷 Pending Function Head Approval` } },
+        { type:'section', text:{ type:'mrkdwn', text:'You will be notified once approved. Use `/travel status` to check anytime.' } }
       ],
       text: `Travel request ${reqId} submitted!`
     });
 
-    // Notify first approver
-    if (hasManager) {
-      const mgrUser = USERS_DATA.find(u => u.name === user.manager);
-      if (mgrUser?.email) await notifyApprover(mgrUser.email, reqId, request, 'manager');
-      else {
-        // No manager found, skip to function head
-        const fhUser = USERS_DATA.find(u => u.name === user.functionHead);
-        if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
-      }
-    } else {
-      const fhUser = USERS_DATA.find(u => u.name === user.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
-      if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
+    // Manager — notification only (no buttons)
+    const mgrUser = USERS_DATA.find(u => u.name === user.manager);
+    if (mgrUser?.email) {
+      const mgrText = `:information_source: *New Travel Request — FYI* — \`${reqId}\`\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept})\n:dart: *Purpose:* ${purpose}\n:round_pushpin: *Route:* ${fromCity} → ${toCity}\n:calendar: *Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n:rocket: *Mode:* ${modes.join(', ')||'—'}\n:zap: *Priority:* ${priority}\n\n_This is for your information. Function Head will approve._`;
+      await dmUser(mgrUser.email, { text: mgrText });
     }
+
+    // Function Head — approval with buttons (always)
+    const fhUser = USERS_DATA.find(u => u.name === user.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
+    if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
     return;
   }
 
@@ -526,33 +520,6 @@ app.post('/slack/actions', async (req, res) => {
   // Resolve approver name
   const _matchedUser = USERS_DATA.find(u => u.email.split('@')[0] === slackUser.name);
   const byName = _matchedUser?.name || slackUser.real_name || slackUser.name || 'Approver';
-
-  // ── Bot chatbot approval actions ──
-  if (actionId === 'bot_mgr_ok' || actionId === 'bot_mgr_no') {
-    const request = SLACK_REQUESTS.get(reqId);
-    if (!request) {
-      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`⚠️ *${reqId}* — Request not found (may have been restarted).` }).catch(()=>{});
-      return;
-    }
-
-    if (actionId === 'bot_mgr_ok') {
-      request.status = 'PENDING_FUNCTION_HEAD';
-      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:white_check_mark: *${reqId}* — Manager approved by ${byName}. Forwarded to Function Head.` }).catch(()=>{});
-
-      // Notify employee of manager approval
-      await dmUser(request.employeeEmail, { text:`:white_check_mark: *Manager Approved* — \`${reqId}\`\nYour travel request has been approved by *${byName}* (Manager) and forwarded to the Function Head for final approval.` });
-
-      // Notify function head
-      const fhUser = USERS_DATA.find(u => u.name === request.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
-      if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
-
-    } else {
-      request.status = 'REJECTED';
-      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:x: *${reqId}* — Rejected by ${byName} (Manager).` }).catch(()=>{});
-      await dmUser(request.employeeEmail, { text:`:x: *Travel Request Rejected* — \`${reqId}\`\nYour request was rejected by *${byName}* (Manager).\n:round_pushpin: Route: ${request.fromCity} → ${request.toCity}  :calendar: ${request.travelDate}\nContact your manager for details.` });
-    }
-    return;
-  }
 
   if (actionId === 'bot_fh_ok' || actionId === 'bot_fh_no') {
     const request = SLACK_REQUESTS.get(reqId);
