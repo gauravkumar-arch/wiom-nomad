@@ -190,6 +190,11 @@ function buildTravelModal(triggerId) {
           element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Pick a date' } }
         },
         {
+          type: 'input', block_id: 'b_return', optional: true,
+          label: { type: 'plain_text', text: '📅 Return Date (Optional)' },
+          element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Pick return date (if applicable)' } }
+        },
+        {
           type: 'input', block_id: 'b_modes',
           label: { type: 'plain_text', text: '🚀 Mode of Travel' },
           element: {
@@ -454,8 +459,9 @@ app.post('/slack/actions', async (req, res) => {
     const purpose    = v.b_purpose?.val?.value || '';
     const fromCity   = v.b_from?.val?.value    || '';
     const toCity     = v.b_to?.val?.value      || '';
-    const travelDate = v.b_date?.val?.selected_date || '';
-    const modes      = (v.b_modes?.val?.selected_options  || []).map(o => o.value);
+    const travelDate  = v.b_date?.val?.selected_date   || '';
+    const returnDate  = v.b_return?.val?.selected_date || '';
+    const modes       = (v.b_modes?.val?.selected_options  || []).map(o => o.value);
     const priority   = v.b_priority?.val?.selected_option?.value || 'Normal';
     const notes      = v.b_notes?.val?.value   || '';
 
@@ -470,7 +476,7 @@ app.post('/slack/actions', async (req, res) => {
       employeeId: user.id, employeeName: user.name, employeeEmail: user.email,
       employeeSlackId: slackUser.id,
       dept: user.dept, manager: user.manager || '', functionHead: user.functionHead || '',
-      purpose, fromCity, toCity, travelDate, types: modes, priority, notes,
+      purpose, fromCity, toCity, travelDate, returnDate, types: modes, priority, notes,
       status: initStatus, createdAt: today
     };
 
