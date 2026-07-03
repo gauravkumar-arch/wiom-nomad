@@ -198,7 +198,7 @@ function buildTravelModal(triggerId) {
           type: 'input', block_id: 'b_modes',
           label: { type: 'plain_text', text: '🚀 Mode of Travel' },
           element: {
-            type: 'checkboxes', action_id: 'val',
+            type: 'radio_buttons', action_id: 'val',
             options: [
               { text: { type: 'plain_text', text: '✈️ Flight' }, value: 'Flight' },
               { text: { type: 'plain_text', text: '🚂 Train' },  value: 'Train'  },
@@ -461,11 +461,23 @@ app.post('/slack/actions', async (req, res) => {
 
   // ── Handle modal form submission ──
   if (payload?.type === 'view_submission') {
-    res.json({}); // Empty response closes the modal
-
-    if (payload.view?.callback_id !== 'travel_form_submit') return;
+    if (payload.view?.callback_id !== 'travel_form_submit') return res.json({});
 
     const v = payload.view.state.values;
+
+    const travelDate = v.b_date?.val?.selected_date   || '';
+    const returnDate = v.b_return?.val?.selected_date || '';
+
+    // Validate: return date must not be before travel date
+    if (returnDate && travelDate && returnDate < travelDate) {
+      return res.json({
+        response_action: 'errors',
+        errors: { b_return: '⚠️ Return date cannot be before travel date' }
+      });
+    }
+
+    res.json({}); // Close the modal — validation passed
+
     const slackUser = payload.user;
     const user = await resolveSlackUser(slackUser.id).catch(() => null);
     const ch   = await openBotDM(slackUser.id).catch(() => null);
@@ -475,14 +487,13 @@ app.post('/slack/actions', async (req, res) => {
       return;
     }
 
-    const purpose    = v.b_purpose?.val?.value || '';
-    const fromCity   = v.b_from?.val?.value    || '';
-    const toCity     = v.b_to?.val?.value      || '';
-    const travelDate  = v.b_date?.val?.selected_date   || '';
-    const returnDate  = v.b_return?.val?.selected_date || '';
-    const modes       = (v.b_modes?.val?.selected_options  || []).map(o => o.value);
-    const priority   = v.b_priority?.val?.selected_option?.value || 'Normal';
-    const notes      = v.b_notes?.val?.value   || '';
+    const purpose  = v.b_purpose?.val?.value || '';
+    const fromCity = v.b_from?.val?.value    || '';
+    const toCity   = v.b_to?.val?.value      || '';
+    const mode     = v.b_modes?.val?.selected_option?.value || '';
+    const modes    = mode ? [mode] : [];
+    const priority = v.b_priority?.val?.selected_option?.value || 'Normal';
+    const notes    = v.b_notes?.val?.value   || '';
 
     const reqId = nextBotReqId();
     const today = new Date().toISOString().split('T')[0];
