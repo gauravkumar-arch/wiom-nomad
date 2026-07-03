@@ -208,19 +208,6 @@ function buildTravelModal(triggerId) {
           }
         },
         {
-          type: 'input', block_id: 'b_priority',
-          label: { type: 'plain_text', text: '⚡ Priority' },
-          element: {
-            type: 'static_select', action_id: 'val',
-            initial_option: { text: { type: 'plain_text', text: '📋 Normal' }, value: 'Normal' },
-            options: [
-              { text: { type: 'plain_text', text: '📋 Normal' },    value: 'Normal'    },
-              { text: { type: 'plain_text', text: '⚡ Urgent' },    value: 'Urgent'    },
-              { text: { type: 'plain_text', text: '🚨 Emergency' }, value: 'Emergency' }
-            ]
-          }
-        },
-        {
           type: 'input', block_id: 'b_notes', optional: true,
           label: { type: 'plain_text', text: '📝 Notes (Optional)' },
           element: { type: 'plain_text_input', action_id: 'val', multiline: true, placeholder: { type: 'plain_text', text: 'Any special requirements...' } }
@@ -492,7 +479,7 @@ app.post('/slack/actions', async (req, res) => {
     const toCity   = v.b_to?.val?.value      || '';
     const mode     = v.b_modes?.val?.selected_option?.value || '';
     const modes    = mode ? [mode] : [];
-    const priority = v.b_priority?.val?.selected_option?.value || 'Normal';
+    const priority = 'Normal';
     const notes    = v.b_notes?.val?.value   || '';
 
     const reqId = nextBotReqId();
