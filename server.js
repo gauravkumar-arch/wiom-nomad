@@ -565,10 +565,11 @@ app.post('/slack/actions', async (req, res) => {
       request.status = 'PENDING_TRAVEL_DESK';
       if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:`:white_check_mark: *${reqId}* — Final approval by ${byName}. Travel Desk notified.` }).catch(()=>{});
 
-      // Notify Travel Desk
-      const tdUser = USERS_DATA.find(u => u.role === 'travel_desk');
-      const modes  = (request.types || []).join(' + ') || '—';
-      await dmUser(tdUser?.email || '', { text:`:ticket: *Book Tickets — ${reqId}*\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity} → ${request.toCity}\n:calendar: *Date:* ${request.travelDate}\n:airplane: *Mode:* ${modes}\n:zap: *Priority:* ${request.priority}\n:white_check_mark: *Approved by:* ${byName} (Function Head)\n\nPlease book on MyBiz: https://mybiz.makemytrip.com` });
+      // Notify all Travel Desk users
+      const tdUsers = USERS_DATA.filter(u => u.role === 'travel_desk');
+      const modes   = (request.types || []).join(' + ') || '—';
+      const tdMsg   = { text:`:ticket: *Book Tickets — ${reqId}*\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity} → ${request.toCity}\n:calendar: *Date:* ${request.travelDate}${request.returnDate ? ' → ' + request.returnDate : ''}\n:airplane: *Mode:* ${modes}\n:zap: *Priority:* ${request.priority}\n:white_check_mark: *Approved by:* ${byName} (Function Head)\n\nPlease book on MyBiz: https://mybiz.makemytrip.com` };
+      await Promise.all(tdUsers.map(td => dmUser(td.email, tdMsg)));
 
       // Notify employee with booking links
       const types = (request.types || []).map(t => t.toLowerCase());
@@ -613,8 +614,8 @@ app.post('/slack/actions', async (req, res) => {
   }
 
   const { req: request, employeeEmail } = stored;
-  const fhUser = USERS_DATA.find(u => u.role === 'function_head');
-  const tdUser = USERS_DATA.find(u => u.role === 'travel_desk');
+  const fhUser  = USERS_DATA.find(u => u.role === 'function_head');
+  const tdUsers = USERS_DATA.filter(u => u.role === 'travel_desk');
 
   if (actionId === 'approve_request') {
     // Function Head approval → PENDING_TRAVEL_DESK
@@ -623,8 +624,9 @@ app.post('/slack/actions', async (req, res) => {
       history: { action:'APPROVED BY FUNCTION HEAD', by:byName, role:'Function Head', date:today, comment:'Approved via Slack' }
     });
 
-    // Notify Travel Desk
-    await dmUser(tdUser?.email||'', { text:`:white_check_mark: *Final Approval Done — Book Tickets* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Travel Date:* ${request.travelDate||'—'}\n:airplane: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:white_check_mark: *Approved by:* ${byName} (Function Head)\n:ticket: *Action Required:* Please book the tickets on MyBiz and update the portal.` });
+    // Notify all Travel Desk users
+    const tdPortalMsg = { text:`:white_check_mark: *Final Approval Done — Book Tickets* — ${reqId}\n:bust_in_silhouette: *Employee:* ${request.employeeName} (${request.dept})\n:dart: *Purpose:* ${request.purpose}\n:round_pushpin: *Route:* ${request.fromCity||'—'} → ${request.toCity||'—'}\n:calendar: *Travel Date:* ${request.travelDate||'—'}\n:airplane: *Mode:* ${(request.types||[]).join(' + ')||'—'}\n:white_check_mark: *Approved by:* ${byName} (Function Head)\n:ticket: *Action Required:* Please book the tickets on MyBiz and update the portal.` };
+    await Promise.all(tdUsers.map(td => dmUser(td.email, tdPortalMsg)));
 
     // Notify Employee with MMT links
     const types = (request.types||[]).map(t=>t.toLowerCase());
