@@ -389,6 +389,25 @@ app.post('/api/slack/notify-approval', async (req, res) => {
   res.json({ ok: true, via: 'dm' });
 });
 
+// ── API: Return all Slack bot requests (for portal to display) ──
+app.get('/api/requests/all', (req, res) => {
+  const list = [...SLACK_REQUESTS.values()];
+  res.json({ ok: true, requests: list, count: list.length });
+});
+
+// ── API: Update status of a Slack bot request (from portal) ──
+app.post('/api/requests/update', (req, res) => {
+  const { reqId, status, bookingRef, note } = req.body;
+  if (!reqId) return res.json({ ok: false, error: 'Missing reqId' });
+  const request = SLACK_REQUESTS.get(reqId);
+  if (!request) return res.json({ ok: false, error: 'Request not found' });
+  if (status)     request.status = status;
+  if (bookingRef) request.bookingRef = bookingRef;
+  if (note)       request.note = note;
+  request.updatedAt = new Date().toISOString().split('T')[0];
+  res.json({ ok: true, request });
+});
+
 // ── Sync: browser calls this to update request stored on server ──
 app.post('/api/requests/save', (req, res) => {
   const { request, employeeEmail } = req.body;

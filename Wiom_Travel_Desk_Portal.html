@@ -916,6 +916,49 @@ function init() {
 
 function save() { localStorage.setItem('wiom_travel_v4', JSON.stringify(requests)); }
 
+// Fetch Slack bot requests from server and merge into local requests array
+async function fetchServerRequests() {
+  try {
+    const res  = await fetch('/api/requests/all');
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.requests) || data.requests.length === 0) return;
+    let added = 0;
+    data.requests.forEach(sr => {
+      if (!requests.find(r => r.id === sr.id)) {
+        // Normalize Slack request to portal format
+        requests.push({
+          id:           sr.id,
+          employeeId:   sr.employeeId   || '',
+          employeeName: sr.employeeName || '',
+          employeeEmail:sr.employeeEmail|| '',
+          dept:         sr.dept         || '',
+          manager:      sr.manager      || '',
+          functionHead: sr.functionHead || '',
+          purpose:      sr.purpose      || '',
+          fromCity:     sr.fromCity     || '',
+          toCity:       sr.toCity       || '',
+          travelDate:   sr.travelDate   || '',
+          returnDate:   sr.returnDate   || '',
+          types:        sr.types        || [],
+          priority:     sr.priority     || 'Normal',
+          notes:        sr.notes        || '',
+          status:       sr.status       || 'PENDING_FUNCTION_HEAD',
+          source:       'slack',
+          createdAt:    sr.createdAt    || '',
+          history:      sr.history      || [],
+          bookingRef:   sr.bookingRef   || '',
+        });
+        added++;
+      } else {
+        // Update status if changed on server
+        const local = requests.find(r => r.id === sr.id);
+        if (local && local.status !== sr.status) local.status = sr.status;
+      }
+    });
+    if (added > 0) { save(); render(); }
+  } catch(e) { /* silent — server requests are bonus data */ }
+}
+
 function resetDemo() {
   if (!confirm('Reset all data to demo state?')) return;
   localStorage.removeItem('wiom_travel_v4');
@@ -1104,6 +1147,7 @@ function verifyOTP() {
   document.querySelector('.footer').style.display='block';
   render(); showChatBubble();
   showToast(`✅ Welcome, ${currentUser.name}!`,'success');
+  fetchServerRequests(); // Merge Slack bot requests from server
 }
 
 function resendOTP() {
