@@ -513,6 +513,8 @@ app.post('/slack/actions', async (req, res) => {
     const reqId = nextBotReqId();
     const today = new Date().toISOString().split('T')[0];
 
+    const isFunctionHead = user.role === 'function_head';
+
     const request = {
       id: reqId, source: 'slack',
       employeeId: user.id, employeeName: user.name, employeeEmail: user.email,
@@ -520,32 +522,51 @@ app.post('/slack/actions', async (req, res) => {
       dept: user.dept, manager: user.manager || '', functionHead: user.functionHead || '',
       purpose, fromCity, toCity, travelDate, returnDate, types: modes, priority, notes,
       approvalFileId, approvalFileName,
-      status: 'PENDING_FUNCTION_HEAD', createdAt: today
+      status: isFunctionHead ? 'PENDING_TRAVEL_DESK' : 'PENDING_FUNCTION_HEAD', createdAt: today
     };
 
     SLACK_REQUESTS.set(reqId, request);
 
     // Confirm to employee
-    if (ch) await slackAPI('chat.postMessage', {
-      channel: ch,
-      blocks: [
-        { type:'header', text:{ type:'plain_text', text:'✅ Travel Request Submitted!' } },
-        { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}\n*Priority:* ${priority}\n*Status:* 🔷 Pending Function Head Approval` } },
-        { type:'section', text:{ type:'mrkdwn', text:'You will be notified once approved. Use `/travel status` to check anytime.' } }
-      ],
-      text: `Travel request ${reqId} submitted!`
-    });
+    if (isFunctionHead) {
+      if (ch) await slackAPI('chat.postMessage', {
+        channel: ch,
+        blocks: [
+          { type:'header', text:{ type:'plain_text', text:'✅ Travel Request Submitted!' } },
+          { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}\n*Priority:* ${priority}\n*Status:* 🎟️ Sent to Travel Desk` } },
+          { type:'section', text:{ type:'mrkdwn', text:'As Function Head, your request goes directly to Travel Desk for booking. You will receive booking details shortly.' } }
+        ],
+        text: `Travel request ${reqId} submitted!`
+      });
+    } else {
+      if (ch) await slackAPI('chat.postMessage', {
+        channel: ch,
+        blocks: [
+          { type:'header', text:{ type:'plain_text', text:'✅ Travel Request Submitted!' } },
+          { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}\n*Priority:* ${priority}\n*Status:* 🔷 Pending Function Head Approval` } },
+          { type:'section', text:{ type:'mrkdwn', text:'You will be notified once approved. Use `/travel status` to check anytime.' } }
+        ],
+        text: `Travel request ${reqId} submitted!`
+      });
+    }
 
     // Manager — notification only (no buttons)
     const mgrUser = USERS_DATA.find(u => u.name === user.manager);
     if (mgrUser?.email) {
-      const mgrText = `:information_source: *New Travel Request — FYI* — \`${reqId}\`\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept})\n:dart: *Purpose:* ${purpose}\n:round_pushpin: *Route:* ${fromCity} → ${toCity}\n:calendar: *Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n:rocket: *Mode:* ${modes.join(', ')||'—'}\n:zap: *Priority:* ${priority}\n\n_This is for your information. Function Head will approve._`;
+      const mgrText = `:information_source: *New Travel Request — FYI* — \`${reqId}\`\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept})\n:dart: *Purpose:* ${purpose}\n:round_pushpin: *Route:* ${fromCity} → ${toCity}\n:calendar: *Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n:rocket: *Mode:* ${modes.join(', ')||'—'}\n:zap: *Priority:* ${priority}\n\n_This is for your information.${isFunctionHead ? ' Request sent directly to Travel Desk.' : ' Function Head will approve.'}_`;
       await dmUser(mgrUser.email, { text: mgrText });
     }
 
-    // Function Head — approval with buttons (always)
-    const fhUser = USERS_DATA.find(u => u.name === user.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
-    if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
+    if (isFunctionHead) {
+      // Function Head submitting own request → skip FH approval, go directly to Travel Desk
+      const tdUsers = USERS_DATA.filter(u => u.role === 'travel_desk');
+      const tdMsg = { text: `:ticket: *Book Tickets — ${reqId}*\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept}) — _Function Head_\n:dart: *Purpose:* ${purpose}\n:round_pushpin: *Route:* ${fromCity} → ${toCity}\n:calendar: *Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n:airplane: *Mode:* ${modes.join(', ')||'—'}\n:zap: *Priority:* ${priority}\n:white_check_mark: *Self-approved* (Function Head)\n\nPlease book on MyBiz: https://mybiz.makemytrip.com` };
+      await Promise.all(tdUsers.map(td => dmUser(td.email, tdMsg)));
+    } else {
+      // Regular employee → Function Head needs to approve
+      const fhUser = USERS_DATA.find(u => u.name === user.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
+      if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
+    }
     return;
   }
 
