@@ -192,6 +192,7 @@ function buildTravelModal(triggerId) {
         {
           type: 'input', block_id: 'b_return', optional: true,
           label: { type: 'plain_text', text: '📅 Return Date (Optional)' },
+          hint: { type: 'plain_text', text: 'Must be on or after Travel Date' },
           element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Pick return date (if applicable)' } }
         },
         {
@@ -459,7 +460,7 @@ app.post('/slack/actions', async (req, res) => {
     if (returnDate && travelDate && returnDate < travelDate) {
       return res.json({
         response_action: 'errors',
-        errors: { b_return: '⚠️ Return date cannot be before travel date' }
+        errors: { b_return: `Return date (${returnDate}) cannot be before travel date (${travelDate})` }
       });
     }
 
