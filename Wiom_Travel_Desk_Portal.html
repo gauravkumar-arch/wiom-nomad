@@ -1978,14 +1978,21 @@ function submitRequest(e) {
   if (selTypes.includes('hotel'))  req.hotel  = { city:v('f_hCity'), roomType:v('f_hRoom'), checkin:v('f_hCheckin'), checkout:v('f_hCheckout'), pref:v('f_hPref') };
   requests.push(req);
   save(); closeNewReq(); render();
-  showToast(`✅ ${id} submitted! Sent to Function Head for approval.`, 'success');
-  const _notifyText = `:clipboard: *New Travel Request* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:airplane: *Mode:* ${req.types?.join(' + ')}\n:calendar: *Date:* ${req.travelDate}\n:hourglass_flowing_sand: *Pending approval from Function Head*`;
-  // Plain notification to manager (no buttons)
-  const _managerUser = USERS.find(u=>u.name===req.manager && u.role==='manager');
-  if (_managerUser) slackNotify(`:bell: *New Travel Request Submitted* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:calendar: *Date:* ${req.travelDate}\n:information_source: This request is pending Function Head approval.`, _managerUser.email);
-  // Approval DM with buttons to Function Head
-  const _fhUser = USERS.find(u=>u.role==='function_head');
-  slackNotifyApproval(_notifyText, _fhUser ? _fhUser.email : '', id, req, currentUser.email);
+  if (currentUser.role === 'function_head') {
+    showToast(`✅ ${id} submitted! Sent directly to Travel Desk for booking.`, 'success');
+    // Function Head submitting own request → notify Travel Desk directly (no FH approval needed)
+    const _tdMsg = `:ticket: *Book Tickets — ${id}*\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept}) — _Function Head_\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:calendar: *Date:* ${req.travelDate}\n:airplane: *Mode:* ${req.types?.join(' + ')}\n:white_check_mark: *Self-approved* (Function Head)\n\nPlease book on MyBiz: https://mybiz.makemytrip.com`;
+    USERS.filter(u=>u.role==='travel_desk').forEach(td => slackNotify(_tdMsg, td.email));
+  } else {
+    showToast(`✅ ${id} submitted! Sent to Function Head for approval.`, 'success');
+    const _notifyText = `:clipboard: *New Travel Request* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:airplane: *Mode:* ${req.types?.join(' + ')}\n:calendar: *Date:* ${req.travelDate}\n:hourglass_flowing_sand: *Pending approval from Function Head*`;
+    // Plain notification to manager (no buttons)
+    const _managerUser = USERS.find(u=>u.name===req.manager && u.role==='manager');
+    if (_managerUser) slackNotify(`:bell: *New Travel Request Submitted* — ${id}\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:calendar: *Date:* ${req.travelDate}\n:information_source: This request is pending Function Head approval.`, _managerUser.email);
+    // Approval DM with buttons to Function Head
+    const _fhUser = USERS.find(u=>u.role==='function_head');
+    slackNotifyApproval(_notifyText, _fhUser ? _fhUser.email : '', id, req, currentUser.email);
+  }
 }
 
 function cancelRequest(reqId) {
