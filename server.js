@@ -154,7 +154,7 @@ let _botSeq = 100;
 function nextBotReqId() { return `REQ-B${String(++_botSeq).padStart(3,'0')}`; }
 
 async function resolveSlackUser(slackUserId) {
-  const r = await slackAPI(`users.info?user=${slackUserId}`, {}, 'GET').catch(() => null);
+  const r = await slackAPI('users.info', { user: slackUserId }, 'GET').catch(() => null);
   const email = r?.user?.profile?.email?.toLowerCase();
   return USERS_DATA.find(u => u.email.toLowerCase() === email) || null;
 }
