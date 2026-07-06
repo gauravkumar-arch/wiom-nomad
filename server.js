@@ -212,6 +212,16 @@ function buildTravelModal(triggerId) {
           type: 'input', block_id: 'b_notes', optional: true,
           label: { type: 'plain_text', text: '📝 Notes (Optional)' },
           element: { type: 'plain_text_input', action_id: 'val', multiline: true, placeholder: { type: 'plain_text', text: 'Any special requirements...' } }
+        },
+        {
+          type: 'input', block_id: 'b_approval_file', optional: true,
+          label: { type: 'plain_text', text: '📎 Approval Email / PDF' },
+          hint: { type: 'plain_text', text: '⚠️ Mandatory if travel date is within 3 days — attach Function Head approval email PDF' },
+          element: {
+            type: 'file_input', action_id: 'val',
+            filetypes: ['pdf', 'jpg', 'jpeg', 'png'],
+            max_files: 1
+          }
         }
       ]
     }
@@ -464,6 +474,20 @@ app.post('/slack/actions', async (req, res) => {
       });
     }
 
+    // Validate: if travel date is within 3 days, approval file is mandatory
+    if (travelDate) {
+      const todayObj  = new Date(); todayObj.setHours(0,0,0,0);
+      const travelObj = new Date(travelDate);
+      const diffDays  = Math.ceil((travelObj - todayObj) / (1000 * 60 * 60 * 24));
+      const uploadedFiles = v.b_approval_file?.val?.files || [];
+      if (diffDays <= 3 && diffDays >= 0 && uploadedFiles.length === 0) {
+        return res.json({
+          response_action: 'errors',
+          errors: { b_approval_file: `Travel is within ${diffDays} day(s) — Function Head approval email/PDF is mandatory for urgent requests` }
+        });
+      }
+    }
+
     res.json({}); // Close the modal — validation passed
 
     const slackUser = payload.user;
@@ -478,10 +502,13 @@ app.post('/slack/actions', async (req, res) => {
     const purpose  = v.b_purpose?.val?.value || '';
     const fromCity = v.b_from?.val?.value    || '';
     const toCity   = v.b_to?.val?.value      || '';
-    const mode     = v.b_modes?.val?.selected_option?.value || '';
-    const modes    = mode ? [mode] : [];
-    const priority = 'Normal';
-    const notes    = v.b_notes?.val?.value   || '';
+    const mode          = v.b_modes?.val?.selected_option?.value || '';
+    const modes         = mode ? [mode] : [];
+    const priority      = 'Normal';
+    const notes         = v.b_notes?.val?.value || '';
+    const approvalFiles = v.b_approval_file?.val?.files || [];
+    const approvalFileId = approvalFiles[0]?.id || '';
+    const approvalFileName = approvalFiles[0]?.name || '';
 
     const reqId = nextBotReqId();
     const today = new Date().toISOString().split('T')[0];
@@ -492,6 +519,7 @@ app.post('/slack/actions', async (req, res) => {
       employeeSlackId: slackUser.id,
       dept: user.dept, manager: user.manager || '', functionHead: user.functionHead || '',
       purpose, fromCity, toCity, travelDate, returnDate, types: modes, priority, notes,
+      approvalFileId, approvalFileName,
       status: 'PENDING_FUNCTION_HEAD', createdAt: today
     };
 
