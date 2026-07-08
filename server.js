@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const https = require('https');
+const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -156,6 +157,30 @@ function nextBotReqId() { return `REQ-B${String(++_botSeq).padStart(3,'0')}`; }
 // ── Chatbot conversational form state ──
 const TRAVEL_CONVS = new Map(); // slackUserId → { step, data, user, ch }
 
+// ── Conversation persistence (survives process restarts within same deploy) ──
+const CONVS_FILE = path.join(__dirname, 'travel_convs.json');
+function saveConvs() {
+  try {
+    const obj = {};
+    for (const [k, v] of TRAVEL_CONVS.entries()) {
+      obj[k] = { step:v.step, data:v.data, user:v.user, ch:v.ch, savedAt:Date.now() };
+    }
+    fs.writeFileSync(CONVS_FILE, JSON.stringify(obj), 'utf8');
+  } catch(e) { console.log('[convs] save failed:', e.message); }
+}
+function loadConvs() {
+  try {
+    if (!fs.existsSync(CONVS_FILE)) return;
+    const obj = JSON.parse(fs.readFileSync(CONVS_FILE, 'utf8'));
+    const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+    for (const [k, v] of Object.entries(obj)) {
+      if (Date.now() - (v.savedAt || 0) < MAX_AGE) TRAVEL_CONVS.set(k, v);
+    }
+    if (TRAVEL_CONVS.size) console.log(`[convs] restored ${TRAVEL_CONVS.size} conversation(s) from file`);
+  } catch(e) { console.log('[convs] load failed:', e.message); }
+}
+loadConvs();
+
 // Steps with buttons: user clicks → block_action → no message.im needed
 // Steps without buttons: user types /travel [answer] OR replies in DM
 const CONV_STEPS = [
@@ -243,15 +268,18 @@ function parseDateInput(input) {
 }
 
 async function startTravelConversation(userId) {
-  const user = await resolveSlackUser(userId).catch(() => null);
-  const ch   = await openBotDM(userId).catch(() => null);
-  if (!ch) return;
+  console.log(`[conv:start] userId=${userId}`);
+  const user = await resolveSlackUser(userId).catch(e => { console.log('[conv:start] resolveUser error:', e.message); return null; });
+  const ch   = await openBotDM(userId).catch(e => { console.log('[conv:start] openDM error:', e.message); return null; });
+  if (!ch) { console.log('[conv:start] no DM channel, abort'); return; }
   if (!user) {
+    console.log(`[conv:start] user not found for Slack ID ${userId}`);
     await slackAPI('chat.postMessage', { channel:ch, text:'❌ Your email is not registered in Wiom Pravash. Contact Travel Desk: gaurav.kumar@wiom.in' });
     return;
   }
   TRAVEL_CONVS.set(userId, { step:0, data:{}, user, ch });
-  // Welcome + first step
+  saveConvs();
+  console.log(`[conv:start] started for ${user.name} (${user.email}), ch=${ch}`);
   const stepMsg = buildStepMessage(CONV_STEPS[0], 1, CONV_STEPS.length);
   await slackAPI('chat.postMessage', {
     channel: ch,
@@ -262,23 +290,24 @@ async function startTravelConversation(userId) {
 
 async function handleConversationReply(userId, rawText, ch) {
   const conv = TRAVEL_CONVS.get(userId);
-  if (!conv) return false;
+  if (!conv) { console.log(`[conv:reply] no conv found for userId=${userId}`); return false; }
 
   const input = rawText.trim();
+  console.log(`[conv:reply] userId=${userId} step=${conv.step} input="${input.substring(0,40)}"`);
 
   if (input.toLowerCase() === 'cancel') {
-    TRAVEL_CONVS.delete(userId);
+    TRAVEL_CONVS.delete(userId); saveConvs();
     await slackAPI('chat.postMessage', { channel:ch, text:'❌ Travel request cancelled. Type `/travel` to start again.' });
     return true;
   }
 
-  // Confirmation step
+  // Confirmation step (text path)
   if (conv.step === CONV_STEPS.length) {
     if (input.toLowerCase() === 'confirm') {
-      TRAVEL_CONVS.delete(userId);
+      TRAVEL_CONVS.delete(userId); saveConvs();
       await submitTravelConversation(userId, conv, ch);
     } else if (input.toLowerCase() === 'restart') {
-      TRAVEL_CONVS.set(userId, { step:0, data:{}, user:conv.user, ch });
+      TRAVEL_CONVS.set(userId, { step:0, data:{}, user:conv.user, ch }); saveConvs();
       await slackAPI('chat.postMessage', { channel:ch, text:`Let's start over!\n\n*Step 1 of ${CONV_STEPS.length}*\n${CONV_STEPS[0].prompt}` });
     } else {
       await slackAPI('chat.postMessage', { channel:ch, text:'Type *confirm* to submit  •  *restart* to start over  •  *cancel* to stop.' });
@@ -332,7 +361,8 @@ async function handleConversationReply(userId, rawText, ch) {
 
 async function advanceConversation(userId, conv, ch) {
   conv.step++;
-  TRAVEL_CONVS.set(userId, conv);
+  TRAVEL_CONVS.set(userId, conv); saveConvs();
+  console.log(`[conv:advance] userId=${userId} now at step=${conv.step}/${CONV_STEPS.length}`);
 
   if (conv.step < CONV_STEPS.length) {
     const next    = CONV_STEPS[conv.step];
@@ -343,7 +373,7 @@ async function advanceConversation(userId, conv, ch) {
       text: `✅ Got it!\n\n${stepMsg.text || next.prompt}`
     });
   } else {
-    // All steps done — show confirmation with buttons
+    console.log(`[conv:advance] userId=${userId} all steps done, showing confirm`);
     const confirmMsg = buildConfirmBlock(conv.data);
     await slackAPI('chat.postMessage', { channel: ch, ...confirmMsg });
   }
@@ -352,6 +382,7 @@ async function advanceConversation(userId, conv, ch) {
 
 async function submitTravelConversation(userId, conv, ch) {
   const { data, user } = conv;
+  console.log(`[conv:submit] userId=${userId} user=${user?.name} route=${data.fromCity}→${data.toCity}`);
   const reqId = nextBotReqId();
   const today = new Date().toISOString().split('T')[0];
   const isFunctionHead = user.role === 'function_head';
@@ -715,6 +746,7 @@ app.post('/slack/commands', (req, res) => {
   if (!SLACK_BOT_TOKEN) return;
 
   (async () => {
+    console.log(`[/travel] user_id=${user_id} text="${rawText.substring(0,40)}" inConv=${TRAVEL_CONVS.has(user_id)}`);
     // ── Keywords that always work regardless of conversation state ──
     if (!sub || sub === 'new' || sub === 'request') {
       return startTravelConversation(user_id);
@@ -732,7 +764,7 @@ app.post('/slack/commands', (req, res) => {
       const ch = conv.ch || await openBotDM(user_id).catch(() => null);
 
       if (sub === 'cancel') {
-        TRAVEL_CONVS.delete(user_id);
+        TRAVEL_CONVS.delete(user_id); saveConvs();
         if (ch) await slackAPI('chat.postMessage', { channel:ch, text:'❌ Travel request cancelled. Type `/travel` to start again.' });
         return;
       }
@@ -933,7 +965,9 @@ app.post('/slack/actions', async (req, res) => {
   if (['travel_conv_answer','travel_conv_skip','travel_conv_confirm','travel_conv_restart','travel_conv_cancel'].includes(actionId)) {
     const userId = slackUser.id;
     const conv   = TRAVEL_CONVS.get(userId);
+    console.log(`[conv:btn] userId=${userId} action=${actionId} convFound=${!!conv}`);
     if (!conv) {
+      console.log(`[conv:btn] session expired for userId=${userId}, active convs: ${[...TRAVEL_CONVS.keys()].join(',') || 'none'}`);
       if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:'⚠️ Session expired (server restarted). Type `/travel` to start over.' }).catch(()=>{});
       return;
     }
@@ -946,18 +980,18 @@ app.post('/slack/actions', async (req, res) => {
     }
 
     if (actionId === 'travel_conv_cancel') {
-      TRAVEL_CONVS.delete(userId);
+      TRAVEL_CONVS.delete(userId); saveConvs();
       await slackAPI('chat.postMessage', { channel:ch, text:'❌ Travel request cancelled. Type `/travel` to start again.' });
       return;
     }
     if (actionId === 'travel_conv_restart') {
-      TRAVEL_CONVS.set(userId, { step:0, data:{}, user:conv.user, ch });
+      TRAVEL_CONVS.set(userId, { step:0, data:{}, user:conv.user, ch }); saveConvs();
       const stepMsg = buildStepMessage(CONV_STEPS[0], 1, CONV_STEPS.length);
       await slackAPI('chat.postMessage', { channel:ch, ...stepMsg, text:`🔄 Restarted!\n\n${stepMsg.text || CONV_STEPS[0].prompt}` });
       return;
     }
     if (actionId === 'travel_conv_confirm') {
-      TRAVEL_CONVS.delete(userId);
+      TRAVEL_CONVS.delete(userId); saveConvs();
       await submitTravelConversation(userId, conv, ch);
       return;
     }
