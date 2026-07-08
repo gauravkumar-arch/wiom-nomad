@@ -619,6 +619,16 @@ app.post('/api/requests/save', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Diagnostic: active chatbot conversations ──
+app.get('/api/slack/convs', (req, res) => {
+  const list = [...TRAVEL_CONVS.entries()].map(([uid, c]) => ({
+    userId: uid, step: c.step, totalSteps: CONV_STEPS.length,
+    currentQuestion: CONV_STEPS[c.step]?.label || 'confirm',
+    data: c.data, userName: c.user?.name
+  }));
+  res.json({ ok: true, activeConversations: list.length, conversations: list });
+});
+
 // ── Sync: browser polls this on login to get Slack-triggered state changes ──
 app.get('/api/requests/updates', (req, res) => {
   res.json({ updates: slackUpdates });
@@ -1013,13 +1023,18 @@ app.post('/slack/events', async (req, res) => {
     return;
   }
 
-  // Handle DMs to the bot (message.im events)
-  if ((ev?.type === 'message' || ev?.type === 'message.im') && !ev.bot_id && ev.user) {
+  // Handle DMs to the bot (message.im events — channel_type 'im' only)
+  if (
+    (ev?.type === 'message' || ev?.type === 'message.im') &&
+    (ev?.channel_type === 'im' || ev?.type === 'message.im') &&
+    !ev.bot_id && !ev.subtype && ev.user && ev.channel
+  ) {
     const rawMsg = (ev.text || '').trim();
     const msg    = rawMsg.toLowerCase();
     const userId = ev.user;
-    const ch     = await openBotDM(userId).catch(() => null);
-    if (!ch) return;
+    const ch     = ev.channel; // use the channel from the event directly — no extra API call
+
+    console.log(`[DM] user=${userId} msg="${msg.substring(0,40)}" inConv=${TRAVEL_CONVS.has(userId)}`);
 
     // If user is mid-conversation, route their reply to the state machine
     if (TRAVEL_CONVS.has(userId)) {
@@ -1053,7 +1068,7 @@ const APP_URL             = 'https://wiom-pravash-production.up.railway.app';
 
 // Step 1 — redirect user to Slack OAuth
 app.get('/slack-setup', (req, res) => {
-  const scopes = 'chat:write,im:write,users:read,users:read.email,incoming-webhook,commands,views:write,files:write,files:read';
+  const scopes = 'chat:write,im:write,im:history,users:read,users:read.email,incoming-webhook,commands,views:write,files:write,files:read';
   const redirectUri = `${APP_URL}/slack/callback`;
   const url = `https://slack.com/oauth/v2/authorize?client_id=${SLACK_CLIENT_ID}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}`;
   res.redirect(url);
