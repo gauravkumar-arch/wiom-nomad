@@ -209,6 +209,20 @@ function buildTravelModal(triggerId) {
           }
         },
         {
+          type: 'input', block_id: 'b_pref_time', optional: true,
+          label: { type: 'plain_text', text: '⏰ Preferred Departure Time' },
+          hint: { type: 'plain_text', text: 'Select your preferred time slot for departure' },
+          element: {
+            type: 'radio_buttons', action_id: 'val',
+            options: [
+              { text: { type: 'plain_text', text: '🌅 Morning  (6 AM – 12 PM)'  }, value: 'Morning (6 AM – 12 PM)'   },
+              { text: { type: 'plain_text', text: '☀️ Afternoon (12 PM – 5 PM)' }, value: 'Afternoon (12 PM – 5 PM)' },
+              { text: { type: 'plain_text', text: '🌆 Evening  (5 PM – 9 PM)'   }, value: 'Evening (5 PM – 9 PM)'    },
+              { text: { type: 'plain_text', text: '🌙 Night    (9 PM – 6 AM)'   }, value: 'Night (9 PM – 6 AM)'      }
+            ]
+          }
+        },
+        {
           type: 'input', block_id: 'b_notes', optional: true,
           label: { type: 'plain_text', text: '📝 Notes (Optional)' },
           hint: { type: 'plain_text', text: '⚠️ If travel date is within 3 days, mention Function Head approval reference here' },
@@ -270,7 +284,7 @@ async function notifyApprover(approverEmail, reqId, req, stage) {
   const approveId  = stage === 'manager' ? 'bot_mgr_ok'  : 'bot_fh_ok';
   const rejectId   = stage === 'manager' ? 'bot_mgr_no'  : 'bot_fh_no';
   const modes      = (req.types || []).join(', ') || '—';
-  const text       = `:airplane: *New Travel Request — ${stageLabel}* — \`${reqId}\`\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:calendar: *Date:* ${req.travelDate}\n:rocket: *Mode:* ${modes}\n:zap: *Priority:* ${req.priority}${req.notes ? '\n:notepad_spiral: *Notes:* ' + req.notes : ''}`;
+  const text       = `:airplane: *New Travel Request — ${stageLabel}* — \`${reqId}\`\n:bust_in_silhouette: *Employee:* ${req.employeeName} (${req.dept})\n:dart: *Purpose:* ${req.purpose}\n:round_pushpin: *Route:* ${req.fromCity} → ${req.toCity}\n:calendar: *Date:* ${req.travelDate}${req.returnDate ? ' → ' + req.returnDate : ''}\n:rocket: *Mode:* ${modes}${req.prefTime ? '\n:alarm_clock: *Preferred Time:* ' + req.prefTime : ''}\n:zap: *Priority:* ${req.priority}${req.notes ? '\n:notepad_spiral: *Notes:* ' + req.notes : ''}`;
   return dmUser(approverEmail, {
     text,
     blocks: [
@@ -499,6 +513,7 @@ app.post('/slack/actions', async (req, res) => {
     const toCity   = v.b_to?.val?.value      || '';
     const mode          = v.b_modes?.val?.selected_option?.value || '';
     const modes         = mode ? [mode] : [];
+    const prefTime      = v.b_pref_time?.val?.selected_option?.value || '';
     const priority      = 'Normal';
     const notes         = v.b_notes?.val?.value || '';
     const approvalFileId = '';
@@ -514,7 +529,7 @@ app.post('/slack/actions', async (req, res) => {
       employeeId: user.id, employeeName: user.name, employeeEmail: user.email,
       employeeSlackId: slackUser.id,
       dept: user.dept, manager: user.manager || '', functionHead: user.functionHead || '',
-      purpose, fromCity, toCity, travelDate, returnDate, types: modes, priority, notes,
+      purpose, fromCity, toCity, travelDate, returnDate, types: modes, prefTime, priority, notes,
       approvalFileId, approvalFileName,
       status: isFunctionHead ? 'PENDING_TRAVEL_DESK' : 'PENDING_FUNCTION_HEAD', createdAt: today
     };
@@ -527,7 +542,7 @@ app.post('/slack/actions', async (req, res) => {
         channel: ch,
         blocks: [
           { type:'header', text:{ type:'plain_text', text:'✅ Travel Request Submitted!' } },
-          { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}\n*Priority:* ${priority}\n*Status:* 🎟️ Sent to Travel Desk` } },
+          { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}${prefTime ? '\n*Preferred Time:* ' + prefTime : ''}\n*Status:* 🎟️ Sent to Travel Desk` } },
           { type:'section', text:{ type:'mrkdwn', text:'As Function Head, your request goes directly to Travel Desk for booking. You will receive booking details shortly.' } }
         ],
         text: `Travel request ${reqId} submitted!`
@@ -537,7 +552,7 @@ app.post('/slack/actions', async (req, res) => {
         channel: ch,
         blocks: [
           { type:'header', text:{ type:'plain_text', text:'✅ Travel Request Submitted!' } },
-          { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}\n*Priority:* ${priority}\n*Status:* 🔷 Pending Function Head Approval` } },
+          { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${fromCity} → ${toCity}\n*Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n*Purpose:* ${purpose}\n*Mode:* ${modes.join(', ')||'—'}${prefTime ? '\n*Preferred Time:* ' + prefTime : ''}\n*Status:* 🔷 Pending Function Head Approval` } },
           { type:'section', text:{ type:'mrkdwn', text:'You will be notified once approved. Use `/travel status` to check anytime.' } }
         ],
         text: `Travel request ${reqId} submitted!`
@@ -554,7 +569,7 @@ app.post('/slack/actions', async (req, res) => {
     if (isFunctionHead) {
       // Function Head submitting own request → skip FH approval, go directly to Travel Desk
       const tdUsers = USERS_DATA.filter(u => u.role === 'travel_desk');
-      const tdMsg = { text: `:ticket: *Book Tickets — ${reqId}*\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept}) — _Function Head_\n:dart: *Purpose:* ${purpose}\n:round_pushpin: *Route:* ${fromCity} → ${toCity}\n:calendar: *Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n:airplane: *Mode:* ${modes.join(', ')||'—'}\n:zap: *Priority:* ${priority}\n:white_check_mark: *Self-approved* (Function Head)\n\nPlease book on MyBiz: https://mybiz.makemytrip.com` };
+      const tdMsg = { text: `:ticket: *Book Tickets — ${reqId}*\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept}) — _Function Head_\n:dart: *Purpose:* ${purpose}\n:round_pushpin: *Route:* ${fromCity} → ${toCity}\n:calendar: *Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}${prefTime ? '\n:alarm_clock: *Preferred Time:* ' + prefTime : ''}\n:airplane: *Mode:* ${modes.join(', ')||'—'}\n:white_check_mark: *Self-approved* (Function Head)\n\nPlease book on MyBiz: https://mybiz.makemytrip.com` };
       await Promise.all(tdUsers.map(td => dmUser(td.email, tdMsg)));
     } else {
       // Regular employee → Function Head needs to approve
