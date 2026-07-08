@@ -156,16 +156,83 @@ function nextBotReqId() { return `REQ-B${String(++_botSeq).padStart(3,'0')}`; }
 // ── Chatbot conversational form state ──
 const TRAVEL_CONVS = new Map(); // slackUserId → { step, data, user, ch }
 
+// Steps with buttons: user clicks → block_action → no message.im needed
+// Steps without buttons: user types /travel [answer] OR replies in DM
 const CONV_STEPS = [
-  { key:'purpose',    label:'Purpose of Travel',   prompt:'📋 What is the *purpose* of your travel?\n_e.g. Client meeting, vendor visit, training_' },
-  { key:'fromCity',   label:'From City',            prompt:'📍 Which city are you traveling *from*?\n_e.g. Delhi_' },
-  { key:'toCity',     label:'To City',              prompt:'📍 Which city are you traveling *to*?\n_e.g. Mumbai_' },
-  { key:'travelDate', label:'Travel Date',          prompt:'📅 What is your *travel date*?\n_Format: DD-MM-YYYY  •  e.g. 15-07-2026_' },
-  { key:'returnDate', label:'Return Date',          prompt:'📅 What is the *return date*? _(one-way? type `skip`)_\n_Format: DD-MM-YYYY_', optional:true },
-  { key:'mode',       label:'Mode of Travel',       prompt:'🚀 *Mode of travel?* Reply with a number:\n`1` — ✈️ Flight\n`2` — 🚂 Train\n`3` — 🚌 Bus\n`4` — 🏨 Hotel', choices:['Flight','Train','Bus','Hotel'] },
-  { key:'prefTime',   label:'Preferred Time',       prompt:'⏰ *Preferred departure time?* Reply with a number _(or `skip`)_:\n`1` — 🌅 Morning (6AM–12PM)\n`2` — ☀️ Afternoon (12PM–5PM)\n`3` — 🌆 Evening (5PM–9PM)\n`4` — 🌙 Night (9PM–6AM)', optional:true, choices:['Morning (6 AM – 12 PM)','Afternoon (12 PM – 5 PM)','Evening (5 PM – 9 PM)','Night (9 PM – 6 AM)'] },
-  { key:'notes',      label:'Notes',                prompt:'📝 Any *notes* or special requirements? _(type `skip` if none)_', optional:true },
+  { key:'purpose',    label:'Purpose of Travel', prompt:'📋 *What is the purpose of your travel?*\n_e.g. Client meeting, vendor visit, training_' },
+  { key:'fromCity',   label:'From City',         prompt:'📍 *Which city are you traveling from?*\n_e.g. Delhi_' },
+  { key:'toCity',     label:'To City',           prompt:'📍 *Which city are you traveling to?*\n_e.g. Mumbai_' },
+  { key:'travelDate', label:'Travel Date',       prompt:'📅 *What is your travel date?*\n_Format: DD-MM-YYYY  •  e.g. 15-07-2026_' },
+  { key:'returnDate', label:'Return Date',       prompt:'📅 *What is the return date?*\n_Format: DD-MM-YYYY  •  or skip if one-way_', optional:true },
+  {
+    key:'mode', label:'Mode of Travel', prompt:'🚀 *Select your mode of travel:*',
+    buttons:[
+      { text:'✈️ Flight', value:'Flight' }, { text:'🚂 Train', value:'Train' },
+      { text:'🚌 Bus',    value:'Bus' },    { text:'🏨 Hotel', value:'Hotel' }
+    ]
+  },
+  {
+    key:'prefTime', label:'Preferred Departure Time', prompt:'⏰ *Preferred departure time:*', optional:true,
+    buttons:[
+      { text:'🌅 Morning (6AM–12PM)',    value:'Morning (6 AM – 12 PM)'   },
+      { text:'☀️ Afternoon (12PM–5PM)', value:'Afternoon (12 PM – 5 PM)' },
+      { text:'🌆 Evening (5PM–9PM)',    value:'Evening (5 PM – 9 PM)'    },
+      { text:'🌙 Night (9PM–6AM)',      value:'Night (9 PM – 6 AM)'      },
+      { text:'⏩ Skip',                  value:'__skip__'                 }
+    ]
+  },
+  { key:'notes', label:'Notes', prompt:'📝 *Any notes or special requirements?*\n_or skip if none_', optional:true },
 ];
+
+// Build the Slack message payload for a given step
+function buildStepMessage(step, stepNum, total) {
+  const header = `*Step ${stepNum} of ${total} — ${step.label}*\n`;
+  if (step.buttons) {
+    return {
+      blocks: [
+        { type:'section', text:{ type:'mrkdwn', text: header + step.prompt } },
+        {
+          type:'actions', block_id:`conv_${step.key}`,
+          elements: step.buttons.map(b => ({
+            type:'button',
+            text:{ type:'plain_text', text:b.text, emoji:true },
+            action_id: b.value === '__skip__' ? 'travel_conv_skip' : 'travel_conv_answer',
+            value: b.value
+          }))
+        }
+      ],
+      text: step.prompt
+    };
+  } else {
+    const skipHint = step.optional ? '\n_Type `/travel skip` to skip this step._' : '';
+    return { text:`${header}${step.prompt}\n\n*Reply here* or type \`/travel [answer]\` in any Slack channel.${skipHint}` };
+  }
+}
+
+function buildConfirmBlock(data) {
+  const lines = [
+    `*📋 Purpose:* ${data.purpose}`,
+    `*📍 Route:* ${data.fromCity} → ${data.toCity}`,
+    `*📅 Travel Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ' _(one-way)_'}`,
+    `*🚀 Mode:* ${data.mode}`,
+    data.prefTime ? `*⏰ Preferred Time:* ${data.prefTime}` : null,
+    data.notes    ? `*📝 Notes:* ${data.notes}` : null,
+  ].filter(Boolean).join('\n');
+  return {
+    blocks: [
+      { type:'section', text:{ type:'mrkdwn', text:`✅ *Review your travel request:*\n\n${lines}` } },
+      {
+        type:'actions', block_id:'conv_confirm',
+        elements: [
+          { type:'button', text:{ type:'plain_text', text:'✅ Submit Request', emoji:true }, style:'primary', action_id:'travel_conv_confirm', value:'confirm' },
+          { type:'button', text:{ type:'plain_text', text:'🔄 Restart',        emoji:true },                  action_id:'travel_conv_restart', value:'restart' },
+          { type:'button', text:{ type:'plain_text', text:'❌ Cancel',          emoji:true }, style:'danger',  action_id:'travel_conv_cancel',  value:'cancel'  }
+        ]
+      }
+    ],
+    text: 'Review your travel request and click Submit.'
+  };
+}
 
 function parseDateInput(input) {
   const dmy = input.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
@@ -184,9 +251,12 @@ async function startTravelConversation(userId) {
     return;
   }
   TRAVEL_CONVS.set(userId, { step:0, data:{}, user, ch });
+  // Welcome + first step
+  const stepMsg = buildStepMessage(CONV_STEPS[0], 1, CONV_STEPS.length);
   await slackAPI('chat.postMessage', {
     channel: ch,
-    text: `Hi *${user.name}*! 👋 Let's create your travel request.\n\nAnswer each question one at a time. Type *cancel* at any time to stop.\n━━━━━━━━━━━━━━━━━━━━\n\n*Step 1 of ${CONV_STEPS.length}*\n${CONV_STEPS[0].prompt}`
+    ...stepMsg,
+    text: `Hi *${user.name}*! 👋 New travel request started.\n\n${stepMsg.text || CONV_STEPS[0].prompt}\n\n_Type \`/travel cancel\` at any time to stop._`
   });
 }
 
@@ -223,19 +293,19 @@ async function handleConversationReply(userId, rawText, ch) {
     return await advanceConversation(userId, conv, ch);
   }
 
-  if (step.choices) {
-    const num = parseInt(input);
-    if (num >= 1 && num <= step.choices.length) {
-      conv.data[step.key] = step.choices[num - 1];
-    } else {
-      const match = step.choices.find(c => c.toLowerCase().startsWith(input.toLowerCase()));
-      if (match) { conv.data[step.key] = match; }
-      else {
-        await slackAPI('chat.postMessage', { channel:ch, text:`Please reply with a number (1–${step.choices.length}).\n\n${step.prompt}` });
-        return true;
-      }
+  // Button steps are handled via /slack/actions — but also accept text if user typed it
+  if (step.buttons) {
+    const chosen = step.buttons.find(b =>
+      b.value !== '__skip__' && b.text.toLowerCase().includes(input.toLowerCase())
+    ) || step.buttons.find(b =>
+      b.value !== '__skip__' && b.value.toLowerCase().startsWith(input.toLowerCase())
+    );
+    if (chosen) {
+      conv.data[step.key] = chosen.value;
+      return await advanceConversation(userId, conv, ch);
     }
-    return await advanceConversation(userId, conv, ch);
+    await slackAPI('chat.postMessage', { channel:ch, text:`Please click one of the buttons above, or type the option name.\n\n${step.prompt}` });
+    return true;
   }
 
   if (step.key === 'travelDate' || step.key === 'returnDate') {
@@ -265,25 +335,17 @@ async function advanceConversation(userId, conv, ch) {
   TRAVEL_CONVS.set(userId, conv);
 
   if (conv.step < CONV_STEPS.length) {
-    const next = CONV_STEPS[conv.step];
+    const next    = CONV_STEPS[conv.step];
+    const stepMsg = buildStepMessage(next, conv.step + 1, CONV_STEPS.length);
     await slackAPI('chat.postMessage', {
       channel: ch,
-      text: `✅ Got it!\n\n*Step ${conv.step + 1} of ${CONV_STEPS.length}*\n${next.prompt}`
+      ...stepMsg,
+      text: `✅ Got it!\n\n${stepMsg.text || next.prompt}`
     });
   } else {
-    const d = conv.data;
-    const lines = [
-      `*📋 Purpose:* ${d.purpose}`,
-      `*📍 Route:* ${d.fromCity} → ${d.toCity}`,
-      `*📅 Travel Date:* ${d.travelDate}${d.returnDate ? ' → ' + d.returnDate : ' _(one-way)_'}`,
-      `*🚀 Mode:* ${d.mode}`,
-      d.prefTime ? `*⏰ Preferred Time:* ${d.prefTime}` : null,
-      d.notes    ? `*📝 Notes:* ${d.notes}` : null,
-    ].filter(Boolean).join('\n');
-    await slackAPI('chat.postMessage', {
-      channel: ch,
-      text: `✅ All details collected! Here's your travel request:\n\n${lines}\n\n━━━━━━━━━━━━━━━━━━━━\nType *confirm* to submit  •  *restart* to start over  •  *cancel* to stop`
-    });
+    // All steps done — show confirmation with buttons
+    const confirmMsg = buildConfirmBlock(conv.data);
+    await slackAPI('chat.postMessage', { channel: ch, ...confirmMsg });
   }
   return true;
 }
@@ -644,20 +706,54 @@ app.post('/api/requests/updates/ack', (req, res) => {
 
 // ── Slack: Slash command /travel ──
 app.post('/slack/commands', (req, res) => {
-  const { trigger_id, user_id, text = '' } = req.body;
-  const sub = (text || '').trim().toLowerCase();
+  const { user_id, text = '' } = req.body;
+  const rawText = (text || '').trim();
+  const sub     = rawText.toLowerCase();
 
   res.status(200).end(); // Acknowledge immediately (Slack requires < 3s)
 
   if (!SLACK_BOT_TOKEN) return;
 
-  if (!sub || sub === 'new' || sub === 'request') {
-    startTravelConversation(user_id).catch(e => console.log('[/travel] conv error:', e.message));
-  } else if (sub === 'status' || sub === 'mystatus') {
-    sendBotStatus(user_id).catch(e => console.log('[/travel status] error:', e.message));
-  } else {
-    sendBotHelp(user_id).catch(e => console.log('[/travel help] error:', e.message));
-  }
+  (async () => {
+    // ── Keywords that always work regardless of conversation state ──
+    if (!sub || sub === 'new' || sub === 'request') {
+      return startTravelConversation(user_id);
+    }
+    if (sub === 'status' || sub === 'mystatus') {
+      return sendBotStatus(user_id);
+    }
+    if (sub === 'help') {
+      return sendBotHelp(user_id);
+    }
+
+    // ── User is in an active conversation — route reply via slash command ──
+    const conv = TRAVEL_CONVS.get(user_id);
+    if (conv) {
+      const ch = conv.ch || await openBotDM(user_id).catch(() => null);
+
+      if (sub === 'cancel') {
+        TRAVEL_CONVS.delete(user_id);
+        if (ch) await slackAPI('chat.postMessage', { channel:ch, text:'❌ Travel request cancelled. Type `/travel` to start again.' });
+        return;
+      }
+      if (sub === 'skip') {
+        const step = CONV_STEPS[conv.step];
+        if (step?.optional) {
+          conv.data[step.key] = '';
+          if (ch) await advanceConversation(user_id, conv, ch);
+        } else if (ch) {
+          await slackAPI('chat.postMessage', { channel:ch, text:`⚠️ This step can't be skipped. Please provide: *${step?.label || 'answer'}*` });
+        }
+        return;
+      }
+      // Treat as answer to current text step
+      if (ch) await handleConversationReply(user_id, rawText, ch);
+      return;
+    }
+
+    // ── No active conversation — start fresh ──
+    return startTravelConversation(user_id);
+  })().catch(e => console.log('[/travel cmd]', e.message));
 });
 
 // ── Slack Interactive Components webhook ──
@@ -830,6 +926,54 @@ app.post('/slack/actions', async (req, res) => {
   // ── App Home button: show my status ──
   if (actionId === 'home_my_status') {
     await sendBotStatus(slackUser.id).catch(e => console.log('[AppHome] status:', e.message));
+    return;
+  }
+
+  // ── Chatbot conversation button clicks ──
+  if (['travel_conv_answer','travel_conv_skip','travel_conv_confirm','travel_conv_restart','travel_conv_cancel'].includes(actionId)) {
+    const userId = slackUser.id;
+    const conv   = TRAVEL_CONVS.get(userId);
+    if (!conv) {
+      if (responseUrl) await httpsPost(responseUrl, { replace_original:true, text:'⚠️ Session expired (server restarted). Type `/travel` to start over.' }).catch(()=>{});
+      return;
+    }
+    const ch = conv.ch;
+
+    // Collapse the button message so old buttons don't remain clickable
+    if (responseUrl) {
+      const btnText = action.text?.text || action.value || '';
+      await httpsPost(responseUrl, { replace_original:true, text:`✅ *${btnText}*` }).catch(()=>{});
+    }
+
+    if (actionId === 'travel_conv_cancel') {
+      TRAVEL_CONVS.delete(userId);
+      await slackAPI('chat.postMessage', { channel:ch, text:'❌ Travel request cancelled. Type `/travel` to start again.' });
+      return;
+    }
+    if (actionId === 'travel_conv_restart') {
+      TRAVEL_CONVS.set(userId, { step:0, data:{}, user:conv.user, ch });
+      const stepMsg = buildStepMessage(CONV_STEPS[0], 1, CONV_STEPS.length);
+      await slackAPI('chat.postMessage', { channel:ch, ...stepMsg, text:`🔄 Restarted!\n\n${stepMsg.text || CONV_STEPS[0].prompt}` });
+      return;
+    }
+    if (actionId === 'travel_conv_confirm') {
+      TRAVEL_CONVS.delete(userId);
+      await submitTravelConversation(userId, conv, ch);
+      return;
+    }
+    if (actionId === 'travel_conv_skip') {
+      const step = CONV_STEPS[conv.step];
+      if (step?.optional) {
+        conv.data[step.key] = '';
+        await advanceConversation(userId, conv, ch);
+      }
+      return;
+    }
+    if (actionId === 'travel_conv_answer') {
+      // Button click counts as answering a choice step
+      await handleConversationReply(userId, action.value, ch);
+      return;
+    }
     return;
   }
 
