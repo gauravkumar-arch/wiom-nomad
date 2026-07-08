@@ -211,17 +211,8 @@ function buildTravelModal(triggerId) {
         {
           type: 'input', block_id: 'b_notes', optional: true,
           label: { type: 'plain_text', text: '📝 Notes (Optional)' },
-          element: { type: 'plain_text_input', action_id: 'val', multiline: true, placeholder: { type: 'plain_text', text: 'Any special requirements...' } }
-        },
-        {
-          type: 'input', block_id: 'b_approval_file', optional: true,
-          label: { type: 'plain_text', text: '📎 Approval Email / PDF' },
-          hint: { type: 'plain_text', text: '⚠️ Mandatory if travel date is within 3 days — attach Function Head approval email PDF' },
-          element: {
-            type: 'file_input', action_id: 'val',
-            filetypes: ['pdf', 'jpg', 'jpeg', 'png'],
-            max_files: 1
-          }
+          hint: { type: 'plain_text', text: '⚠️ If travel date is within 3 days, mention Function Head approval reference here' },
+          element: { type: 'plain_text_input', action_id: 'val', multiline: true, placeholder: { type: 'plain_text', text: 'Any special requirements or approval reference for urgent requests...' } }
         }
       ]
     }
@@ -474,20 +465,6 @@ app.post('/slack/actions', async (req, res) => {
       });
     }
 
-    // Validate: if travel date is within 3 days, approval file is mandatory
-    if (travelDate) {
-      const todayObj  = new Date(); todayObj.setHours(0,0,0,0);
-      const travelObj = new Date(travelDate);
-      const diffDays  = Math.ceil((travelObj - todayObj) / (1000 * 60 * 60 * 24));
-      const uploadedFiles = v.b_approval_file?.val?.files || [];
-      if (diffDays <= 3 && diffDays >= 0 && uploadedFiles.length === 0) {
-        return res.json({
-          response_action: 'errors',
-          errors: { b_approval_file: `Travel is within ${diffDays} day(s) — Function Head approval email/PDF is mandatory for urgent requests` }
-        });
-      }
-    }
-
     res.json({}); // Close the modal — validation passed
 
     const slackUser = payload.user;
@@ -506,9 +483,8 @@ app.post('/slack/actions', async (req, res) => {
     const modes         = mode ? [mode] : [];
     const priority      = 'Normal';
     const notes         = v.b_notes?.val?.value || '';
-    const approvalFiles = v.b_approval_file?.val?.files || [];
-    const approvalFileId = approvalFiles[0]?.id || '';
-    const approvalFileName = approvalFiles[0]?.name || '';
+    const approvalFileId = '';
+    const approvalFileName = '';
 
     const reqId = nextBotReqId();
     const today = new Date().toISOString().split('T')[0];
@@ -867,7 +843,7 @@ const APP_URL             = 'https://wiom-pravash-production.up.railway.app';
 
 // Step 1 — redirect user to Slack OAuth
 app.get('/slack-setup', (req, res) => {
-  const scopes = 'chat:write,im:write,users:read,users:read.email,incoming-webhook,commands,views:write';
+  const scopes = 'chat:write,im:write,users:read,users:read.email,incoming-webhook,commands,views:write,files:write,files:read';
   const redirectUri = `${APP_URL}/slack/callback`;
   const url = `https://slack.com/oauth/v2/authorize?client_id=${SLACK_CLIENT_ID}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}`;
   res.redirect(url);
