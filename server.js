@@ -1023,11 +1023,11 @@ app.post('/slack/events', async (req, res) => {
     return;
   }
 
-  // Handle DMs to the bot (message.im events — channel_type 'im' only)
+  // Handle DMs to the bot — channel starts with 'D' (Slack DM channel prefix)
   if (
     (ev?.type === 'message' || ev?.type === 'message.im') &&
-    (ev?.channel_type === 'im' || ev?.type === 'message.im') &&
-    !ev.bot_id && !ev.subtype && ev.user && ev.channel
+    !ev.bot_id && !ev.subtype && ev.user && ev.channel &&
+    (ev.channel_type === 'im' || ev.channel_type === undefined || ev.channel?.startsWith('D'))
   ) {
     const rawMsg = (ev.text || '').trim();
     const msg    = rawMsg.toLowerCase();
