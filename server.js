@@ -153,6 +153,188 @@ const SLACK_REQUESTS = new Map();   // reqId → full request object
 let _botSeq = 100;
 function nextBotReqId() { return `REQ-B${String(++_botSeq).padStart(3,'0')}`; }
 
+// ── Chatbot conversational form state ──
+const TRAVEL_CONVS = new Map(); // slackUserId → { step, data, user, ch }
+
+const CONV_STEPS = [
+  { key:'purpose',    label:'Purpose of Travel',   prompt:'📋 What is the *purpose* of your travel?\n_e.g. Client meeting, vendor visit, training_' },
+  { key:'fromCity',   label:'From City',            prompt:'📍 Which city are you traveling *from*?\n_e.g. Delhi_' },
+  { key:'toCity',     label:'To City',              prompt:'📍 Which city are you traveling *to*?\n_e.g. Mumbai_' },
+  { key:'travelDate', label:'Travel Date',          prompt:'📅 What is your *travel date*?\n_Format: DD-MM-YYYY  •  e.g. 15-07-2026_' },
+  { key:'returnDate', label:'Return Date',          prompt:'📅 What is the *return date*? _(one-way? type `skip`)_\n_Format: DD-MM-YYYY_', optional:true },
+  { key:'mode',       label:'Mode of Travel',       prompt:'🚀 *Mode of travel?* Reply with a number:\n`1` — ✈️ Flight\n`2` — 🚂 Train\n`3` — 🚌 Bus\n`4` — 🏨 Hotel', choices:['Flight','Train','Bus','Hotel'] },
+  { key:'prefTime',   label:'Preferred Time',       prompt:'⏰ *Preferred departure time?* Reply with a number _(or `skip`)_:\n`1` — 🌅 Morning (6AM–12PM)\n`2` — ☀️ Afternoon (12PM–5PM)\n`3` — 🌆 Evening (5PM–9PM)\n`4` — 🌙 Night (9PM–6AM)', optional:true, choices:['Morning (6 AM – 12 PM)','Afternoon (12 PM – 5 PM)','Evening (5 PM – 9 PM)','Night (9 PM – 6 AM)'] },
+  { key:'notes',      label:'Notes',                prompt:'📝 Any *notes* or special requirements? _(type `skip` if none)_', optional:true },
+];
+
+function parseDateInput(input) {
+  const dmy = input.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+  const ymd = input.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (ymd) return `${ymd[1]}-${ymd[2].padStart(2,'0')}-${ymd[3].padStart(2,'0')}`;
+  return null;
+}
+
+async function startTravelConversation(userId) {
+  const user = await resolveSlackUser(userId).catch(() => null);
+  const ch   = await openBotDM(userId).catch(() => null);
+  if (!ch) return;
+  if (!user) {
+    await slackAPI('chat.postMessage', { channel:ch, text:'❌ Your email is not registered in Wiom Pravash. Contact Travel Desk: gaurav.kumar@wiom.in' });
+    return;
+  }
+  TRAVEL_CONVS.set(userId, { step:0, data:{}, user, ch });
+  await slackAPI('chat.postMessage', {
+    channel: ch,
+    text: `Hi *${user.name}*! 👋 Let's create your travel request.\n\nAnswer each question one at a time. Type *cancel* at any time to stop.\n━━━━━━━━━━━━━━━━━━━━\n\n*Step 1 of ${CONV_STEPS.length}*\n${CONV_STEPS[0].prompt}`
+  });
+}
+
+async function handleConversationReply(userId, rawText, ch) {
+  const conv = TRAVEL_CONVS.get(userId);
+  if (!conv) return false;
+
+  const input = rawText.trim();
+
+  if (input.toLowerCase() === 'cancel') {
+    TRAVEL_CONVS.delete(userId);
+    await slackAPI('chat.postMessage', { channel:ch, text:'❌ Travel request cancelled. Type `/travel` to start again.' });
+    return true;
+  }
+
+  // Confirmation step
+  if (conv.step === CONV_STEPS.length) {
+    if (input.toLowerCase() === 'confirm') {
+      TRAVEL_CONVS.delete(userId);
+      await submitTravelConversation(userId, conv, ch);
+    } else if (input.toLowerCase() === 'restart') {
+      TRAVEL_CONVS.set(userId, { step:0, data:{}, user:conv.user, ch });
+      await slackAPI('chat.postMessage', { channel:ch, text:`Let's start over!\n\n*Step 1 of ${CONV_STEPS.length}*\n${CONV_STEPS[0].prompt}` });
+    } else {
+      await slackAPI('chat.postMessage', { channel:ch, text:'Type *confirm* to submit  •  *restart* to start over  •  *cancel* to stop.' });
+    }
+    return true;
+  }
+
+  const step = CONV_STEPS[conv.step];
+
+  if (input.toLowerCase() === 'skip' && step.optional) {
+    conv.data[step.key] = '';
+    return await advanceConversation(userId, conv, ch);
+  }
+
+  if (step.choices) {
+    const num = parseInt(input);
+    if (num >= 1 && num <= step.choices.length) {
+      conv.data[step.key] = step.choices[num - 1];
+    } else {
+      const match = step.choices.find(c => c.toLowerCase().startsWith(input.toLowerCase()));
+      if (match) { conv.data[step.key] = match; }
+      else {
+        await slackAPI('chat.postMessage', { channel:ch, text:`Please reply with a number (1–${step.choices.length}).\n\n${step.prompt}` });
+        return true;
+      }
+    }
+    return await advanceConversation(userId, conv, ch);
+  }
+
+  if (step.key === 'travelDate' || step.key === 'returnDate') {
+    const parsed = parseDateInput(input);
+    if (!parsed) {
+      await slackAPI('chat.postMessage', { channel:ch, text:`❌ Invalid date format. Please use DD-MM-YYYY\n_e.g. 15-07-2026_` });
+      return true;
+    }
+    if (step.key === 'returnDate' && conv.data.travelDate && parsed < conv.data.travelDate) {
+      await slackAPI('chat.postMessage', { channel:ch, text:`❌ Return date can't be before travel date (${conv.data.travelDate}). Try again:` });
+      return true;
+    }
+    conv.data[step.key] = parsed;
+    return await advanceConversation(userId, conv, ch);
+  }
+
+  if (!input) {
+    await slackAPI('chat.postMessage', { channel:ch, text:`Please enter a value:\n${step.prompt}` });
+    return true;
+  }
+  conv.data[step.key] = input;
+  return await advanceConversation(userId, conv, ch);
+}
+
+async function advanceConversation(userId, conv, ch) {
+  conv.step++;
+  TRAVEL_CONVS.set(userId, conv);
+
+  if (conv.step < CONV_STEPS.length) {
+    const next = CONV_STEPS[conv.step];
+    await slackAPI('chat.postMessage', {
+      channel: ch,
+      text: `✅ Got it!\n\n*Step ${conv.step + 1} of ${CONV_STEPS.length}*\n${next.prompt}`
+    });
+  } else {
+    const d = conv.data;
+    const lines = [
+      `*📋 Purpose:* ${d.purpose}`,
+      `*📍 Route:* ${d.fromCity} → ${d.toCity}`,
+      `*📅 Travel Date:* ${d.travelDate}${d.returnDate ? ' → ' + d.returnDate : ' _(one-way)_'}`,
+      `*🚀 Mode:* ${d.mode}`,
+      d.prefTime ? `*⏰ Preferred Time:* ${d.prefTime}` : null,
+      d.notes    ? `*📝 Notes:* ${d.notes}` : null,
+    ].filter(Boolean).join('\n');
+    await slackAPI('chat.postMessage', {
+      channel: ch,
+      text: `✅ All details collected! Here's your travel request:\n\n${lines}\n\n━━━━━━━━━━━━━━━━━━━━\nType *confirm* to submit  •  *restart* to start over  •  *cancel* to stop`
+    });
+  }
+  return true;
+}
+
+async function submitTravelConversation(userId, conv, ch) {
+  const { data, user } = conv;
+  const reqId = nextBotReqId();
+  const today = new Date().toISOString().split('T')[0];
+  const isFunctionHead = user.role === 'function_head';
+  const modes = data.mode ? [data.mode] : [];
+
+  const request = {
+    id:reqId, source:'slack',
+    employeeId:user.id, employeeName:user.name, employeeEmail:user.email,
+    employeeSlackId:userId,
+    dept:user.dept, manager:user.manager||'', functionHead:user.functionHead||'',
+    purpose:data.purpose, fromCity:data.fromCity, toCity:data.toCity,
+    travelDate:data.travelDate, returnDate:data.returnDate||'',
+    types:modes, prefTime:data.prefTime||'', priority:'Normal',
+    notes:data.notes||'', approvalFileId:'', approvalFileName:'',
+    status: isFunctionHead ? 'PENDING_TRAVEL_DESK' : 'PENDING_FUNCTION_HEAD', createdAt:today
+  };
+  SLACK_REQUESTS.set(reqId, request);
+
+  const statusText = isFunctionHead ? '🎟️ Sent directly to Travel Desk' : '🔷 Pending Function Head Approval';
+  await slackAPI('chat.postMessage', {
+    channel: ch,
+    blocks: [
+      { type:'header', text:{ type:'plain_text', text:'✅ Travel Request Submitted!' } },
+      { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${data.fromCity} → ${data.toCity}\n*Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ''}\n*Purpose:* ${data.purpose}\n*Mode:* ${data.mode||'—'}${data.prefTime ? '\n*Preferred Time:* ' + data.prefTime : ''}\n*Status:* ${statusText}` } },
+      { type:'section', text:{ type:'mrkdwn', text:'Use `/travel status` to check anytime.' } }
+    ],
+    text: `Travel request ${reqId} submitted!`
+  });
+
+  const mgrUser = USERS_DATA.find(u => u.name === user.manager);
+  if (mgrUser?.email) {
+    const mgrText = `:information_source: *New Travel Request — FYI* — \`${reqId}\`\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept})\n:dart: *Purpose:* ${data.purpose}\n:round_pushpin: *Route:* ${data.fromCity} → ${data.toCity}\n:calendar: *Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ''}${data.prefTime ? '\n:alarm_clock: *Preferred Time:* ' + data.prefTime : ''}\n:rocket: *Mode:* ${data.mode||'—'}\n\n_This is for your information.${isFunctionHead ? ' Request sent directly to Travel Desk.' : ' Function Head will approve.'}_`;
+    await dmUser(mgrUser.email, { text:mgrText });
+  }
+
+  if (isFunctionHead) {
+    const tdUsers = USERS_DATA.filter(u => u.role === 'travel_desk');
+    const tdMsg = { text:`:ticket: *Book Tickets — ${reqId}*\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept}) — _Function Head_\n:dart: *Purpose:* ${data.purpose}\n:round_pushpin: *Route:* ${data.fromCity} → ${data.toCity}\n:calendar: *Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ''}${data.prefTime ? '\n:alarm_clock: *Preferred Time:* ' + data.prefTime : ''}\n:airplane: *Mode:* ${data.mode||'—'}\n:white_check_mark: *Self-approved* (Function Head)\n\nPlease book on MyBiz: https://mybiz.makemytrip.com` };
+    await Promise.all(tdUsers.map(td => dmUser(td.email, tdMsg)));
+  } else {
+    const fhUser = USERS_DATA.find(u => u.name === user.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
+    if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
+  }
+}
+
 async function resolveSlackUser(slackUserId) {
   const r = await slackAPI('users.info', { user: slackUserId }, 'GET').catch(() => null);
   const email = r?.user?.profile?.email?.toLowerCase();
@@ -460,10 +642,7 @@ app.post('/slack/commands', (req, res) => {
   if (!SLACK_BOT_TOKEN) return;
 
   if (!sub || sub === 'new' || sub === 'request') {
-    // Open modal — trigger_id expires in 3s so call immediately (don't await first)
-    slackAPI('views.open', buildTravelModal(trigger_id))
-      .then(r => { if (!r?.ok) { console.log('[/travel] views.open failed:', r?.error); sendBotHelp(user_id).catch(()=>{}); } })
-      .catch(e => console.log('[/travel] views.open error:', e.message));
+    startTravelConversation(user_id).catch(e => console.log('[/travel] conv error:', e.message));
   } else if (sub === 'status' || sub === 'mystatus') {
     sendBotStatus(user_id).catch(e => console.log('[/travel status] error:', e.message));
   } else {
@@ -632,10 +811,9 @@ app.post('/slack/actions', async (req, res) => {
     return;
   }
 
-  // ── App Home button: open travel modal ──
+  // ── App Home button: start travel conversation ──
   if (actionId === 'home_new_travel') {
-    const triggerId = payload.trigger_id;
-    if (triggerId) slackAPI('views.open', buildTravelModal(triggerId)).catch(e => console.log('[AppHome] views.open:', e.message));
+    await startTravelConversation(slackUser.id).catch(e => console.log('[AppHome] conv start:', e.message));
     return;
   }
 
@@ -837,29 +1015,28 @@ app.post('/slack/events', async (req, res) => {
 
   // Handle DMs to the bot (message.im events)
   if ((ev?.type === 'message' || ev?.type === 'message.im') && !ev.bot_id && ev.user) {
-    const msg = (ev.text || '').trim().toLowerCase();
+    const rawMsg = (ev.text || '').trim();
+    const msg    = rawMsg.toLowerCase();
     const userId = ev.user;
+    const ch     = await openBotDM(userId).catch(() => null);
+    if (!ch) return;
+
+    // If user is mid-conversation, route their reply to the state machine
+    if (TRAVEL_CONVS.has(userId)) {
+      await handleConversationReply(userId, rawMsg, ch).catch(e => console.log('[conv reply]', e.message));
+      return;
+    }
+
     if (msg === 'new' || msg === 'travel' || msg === 'submit' || msg === 'request') {
-      // Can't open modal from message events — guide to slash command
-      const ch = await openBotDM(userId).catch(() => null);
-      if (ch) await slackAPI('chat.postMessage', {
-        channel: ch,
-        blocks: [
-          { type:'section', text:{ type:'mrkdwn', text:'To submit a new travel request, use the slash command:' } },
-          { type:'section', text:{ type:'mrkdwn', text:'> */travel*\nOr click the *🆕 New Travel Request* button in the App Home tab above.' } }
-        ],
-        text: 'Use /travel to submit a travel request'
-      });
+      await startTravelConversation(userId).catch(e => console.log('[DM new travel] error:', e.message));
     } else if (msg === 'status' || msg === 'my requests' || msg === 'requests') {
       await sendBotStatus(userId).catch(e => console.log('[DM status] error:', e.message));
     } else if (msg === 'help' || msg === '?') {
       await sendBotHelp(userId).catch(e => console.log('[DM help] error:', e.message));
     } else if (msg) {
-      // Default: show help
-      const ch = await openBotDM(userId).catch(() => null);
-      if (ch) await slackAPI('chat.postMessage', {
+      await slackAPI('chat.postMessage', {
         channel: ch,
-        text: 'Hi! Type `help` to see available commands, or use `/travel` to submit a request.'
+        text: 'Hi! 👋 Type `new` to submit a travel request, `status` to check your requests, or `help` for all commands.\n\nOr use `/travel` in any channel.'
       });
     }
   }
