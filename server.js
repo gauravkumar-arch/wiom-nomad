@@ -312,6 +312,24 @@ app.get('/api/slack/whoami', async (req, res) => {
   res.json(r);
 });
 
+app.get('/api/slack/scopes', async (req, res) => {
+  if (!SLACK_BOT_TOKEN) return res.json({ ok: false, error: 'No bot token' });
+  // auth.test returns scopes in response headers — check via a raw HTTPS call
+  const scopes = await new Promise(resolve => {
+    const req2 = https.request({
+      hostname: 'slack.com', path: '/api/auth.test', method: 'GET',
+      headers: { 'Authorization': `Bearer ${SLACK_BOT_TOKEN}` }
+    }, resp => {
+      let d = '';
+      resp.on('data', c => d += c);
+      resp.on('end', () => resolve({ scopes: resp.headers['x-oauth-scopes'] || 'not_returned', status: resp.statusCode, body: d }));
+    });
+    req2.on('error', e => resolve({ error: e.message }));
+    req2.end();
+  });
+  res.json(scopes);
+});
+
 app.get('/api/slack/test-dm', async (req, res) => {
   const email = req.query.email || 'gaurav.kumar@wiom.in';
   if (!SLACK_BOT_TOKEN) return res.json({ ok: false, step: 'token', error: 'No bot token' });
