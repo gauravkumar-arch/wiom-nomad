@@ -268,6 +268,22 @@ function parseDateInput(input) {
 }
 
 async function startTravelConversation(userId) {
+  // Guard against double-trigger (button clicked twice, Slack retry, etc.)
+  const existing = TRAVEL_CONVS.get(userId);
+  if (existing) {
+    console.log(`[conv:start] already active for ${userId} at step ${existing.step}, ignoring duplicate`);
+    const ch = existing.ch || await openBotDM(userId).catch(() => null);
+    if (ch) {
+      const step = CONV_STEPS[existing.step];
+      const stepMsg = step ? buildStepMessage(step, existing.step + 1, CONV_STEPS.length) : null;
+      await slackAPI('chat.postMessage', {
+        channel: ch,
+        ...(stepMsg || {}),
+        text: `You already have a travel request in progress (Step ${existing.step + 1} of ${CONV_STEPS.length}).\n\n${stepMsg?.text || step?.prompt || ''}\n\n_Type \`/travel cancel\` to cancel and start fresh._`
+      });
+    }
+    return;
+  }
   console.log(`[conv:start] userId=${userId}`);
   const user = await resolveSlackUser(userId).catch(e => { console.log('[conv:start] resolveUser error:', e.message); return null; });
   const ch   = await openBotDM(userId).catch(e => { console.log('[conv:start] openDM error:', e.message); return null; });
