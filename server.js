@@ -157,6 +157,7 @@ function nextBotReqId() { return `REQ-B${String(++_botSeq).padStart(3,'0')}`; }
 // ── Chatbot conversational form state ──
 const TRAVEL_CONVS = new Map(); // slackUserId → { step, data, user, ch }
 const CONV_STARTING = new Set(); // synchronous lock to prevent race-condition duplicates
+let lastActionLog = null; // debug: last received Slack action
 
 // ── Conversation persistence (survives process restarts within same deploy) ──
 const CONVS_FILE = path.join(__dirname, 'travel_convs.json');
@@ -647,6 +648,7 @@ app.get('/api/slack/scopes', async (req, res) => {
 });
 
 app.get('/api/version', (req, res) => res.json({ version: '662f232-button-fix', convs: TRAVEL_CONVS.size }));
+app.get('/api/slack/last-action', (req, res) => res.json({ lastAction: lastActionLog }));
 
 // ── Test: simulate double-click on New Travel Request ──
 app.get('/api/slack/test-race', async (req, res) => {
@@ -963,6 +965,8 @@ app.post('/slack/actions', async (req, res) => {
   if (!action) return;
 
   const actionId = action.action_id;
+  console.log(`[actions] type=${payload.type} actionId=${actionId} userId=${slackUser.id} userName=${slackUser.username}`);
+  lastActionLog = { actionId, userId: slackUser.id, userName: slackUser.username, ts: Date.now() };
   const reqId    = action.value;
   const today    = new Date().toISOString().split('T')[0];
 
