@@ -644,6 +644,12 @@ app.get('/api/slack/test-race', async (req, res) => {
   res.json({ ok: true, convs: TRAVEL_CONVS.size, r1: r1.status, r2: r2.status, message: 'Check Slack — should be exactly 1 welcome message' });
 });
 
+app.get('/api/slack/reset-conv', (req, res) => {
+  const userId = req.query.userId || 'U0B7PV19V17';
+  TRAVEL_CONVS.delete(userId); CONV_STARTING.delete(userId); saveConvs();
+  res.json({ ok: true, cleared: userId, remaining: TRAVEL_CONVS.size });
+});
+
 app.get('/api/slack/test-dm', async (req, res) => {
   const email = req.query.email || 'gaurav.kumar@wiom.in';
   if (!SLACK_BOT_TOKEN) return res.json({ ok: false, step: 'token', error: 'No bot token' });
