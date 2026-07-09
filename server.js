@@ -156,6 +156,7 @@ function nextBotReqId() { return `REQ-B${String(++_botSeq).padStart(3,'0')}`; }
 
 // ── Chatbot conversational form state ──
 const TRAVEL_CONVS = new Map(); // slackUserId → { step, data, user, ch }
+const CONV_STARTING = new Set(); // synchronous lock to prevent race-condition duplicates
 
 // ── Conversation persistence (survives process restarts within same deploy) ──
 const CONVS_FILE = path.join(__dirname, 'travel_convs.json');
@@ -268,40 +269,34 @@ function parseDateInput(input) {
 }
 
 async function startTravelConversation(userId) {
-  // Guard against double-trigger (button clicked twice, Slack retry, etc.)
-  const existing = TRAVEL_CONVS.get(userId);
-  if (existing) {
-    console.log(`[conv:start] already active for ${userId} at step ${existing.step}, ignoring duplicate`);
-    const ch = existing.ch || await openBotDM(userId).catch(() => null);
-    if (ch) {
-      const step = CONV_STEPS[existing.step];
-      const stepMsg = step ? buildStepMessage(step, existing.step + 1, CONV_STEPS.length) : null;
-      await slackAPI('chat.postMessage', {
-        channel: ch,
-        ...(stepMsg || {}),
-        text: `You already have a travel request in progress (Step ${existing.step + 1} of ${CONV_STEPS.length}).\n\n${stepMsg?.text || step?.prompt || ''}\n\n_Type \`/travel cancel\` to cancel and start fresh._`
-      });
+  // Synchronous check BEFORE any await — prevents race condition when Slack sends duplicate button events
+  if (CONV_STARTING.has(userId) || TRAVEL_CONVS.has(userId)) {
+    console.log(`[conv:start] duplicate ignored for ${userId} (starting=${CONV_STARTING.has(userId)} active=${TRAVEL_CONVS.has(userId)})`);
+    return;
+  }
+  CONV_STARTING.add(userId); // claim the slot synchronously before first await
+  try {
+    console.log(`[conv:start] userId=${userId}`);
+    const user = await resolveSlackUser(userId).catch(e => { console.log('[conv:start] resolveUser error:', e.message); return null; });
+    const ch   = await openBotDM(userId).catch(e => { console.log('[conv:start] openDM error:', e.message); return null; });
+    if (!ch) { console.log('[conv:start] no DM channel, abort'); return; }
+    if (!user) {
+      console.log(`[conv:start] user not found for Slack ID ${userId}`);
+      await slackAPI('chat.postMessage', { channel:ch, text:'❌ Your email is not registered in Wiom Pravash. Contact Travel Desk: gaurav.kumar@wiom.in' });
+      return;
     }
-    return;
+    TRAVEL_CONVS.set(userId, { step:0, data:{}, user, ch });
+    saveConvs();
+    console.log(`[conv:start] started for ${user.name} (${user.email}), ch=${ch}`);
+    const stepMsg = buildStepMessage(CONV_STEPS[0], 1, CONV_STEPS.length);
+    await slackAPI('chat.postMessage', {
+      channel: ch,
+      ...stepMsg,
+      text: `Hi *${user.name}*! 👋 New travel request started.\n\n${stepMsg.text || CONV_STEPS[0].prompt}\n\n_Type \`/travel cancel\` at any time to stop._`
+    });
+  } finally {
+    CONV_STARTING.delete(userId);
   }
-  console.log(`[conv:start] userId=${userId}`);
-  const user = await resolveSlackUser(userId).catch(e => { console.log('[conv:start] resolveUser error:', e.message); return null; });
-  const ch   = await openBotDM(userId).catch(e => { console.log('[conv:start] openDM error:', e.message); return null; });
-  if (!ch) { console.log('[conv:start] no DM channel, abort'); return; }
-  if (!user) {
-    console.log(`[conv:start] user not found for Slack ID ${userId}`);
-    await slackAPI('chat.postMessage', { channel:ch, text:'❌ Your email is not registered in Wiom Pravash. Contact Travel Desk: gaurav.kumar@wiom.in' });
-    return;
-  }
-  TRAVEL_CONVS.set(userId, { step:0, data:{}, user, ch });
-  saveConvs();
-  console.log(`[conv:start] started for ${user.name} (${user.email}), ch=${ch}`);
-  const stepMsg = buildStepMessage(CONV_STEPS[0], 1, CONV_STEPS.length);
-  await slackAPI('chat.postMessage', {
-    channel: ch,
-    ...stepMsg,
-    text: `Hi *${user.name}*! 👋 New travel request started.\n\n${stepMsg.text || CONV_STEPS[0].prompt}\n\n_Type \`/travel cancel\` at any time to stop._`
-  });
 }
 
 async function handleConversationReply(userId, rawText, ch) {
