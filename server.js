@@ -1167,10 +1167,9 @@ app.post('/slack/actions', async (req, res) => {
     return;
   }
 
-  // ── App Home button: show travel type menu ──
+  // ── App Home button: start travel conversation directly ──
   if (actionId === 'home_new_travel') {
-    const dmCh = await openBotDM(slackUser.id).catch(() => null);
-    if (dmCh) await sendTravelMenu(slackUser.id, dmCh, slackUser.real_name || slackUser.name).catch(e => console.log('[AppHome] menu:', e.message));
+    await startTravelConversation(slackUser.id, 'flight').catch(e => console.log('[AppHome] conv start:', e.message));
     return;
   }
 
@@ -1409,17 +1408,8 @@ async function publishHomeView(userId) {
       {
         type:'actions',
         elements: [
-          { type:'button', text:{ type:'plain_text', text:'✈️ Flight',    emoji:true }, style:'primary', action_id:'travel_type_select', value:'flight' },
-          { type:'button', text:{ type:'plain_text', text:'🚂 Train',     emoji:true },                  action_id:'travel_type_select', value:'train'  },
-          { type:'button', text:{ type:'plain_text', text:'🏨 Hotel',     emoji:true },                  action_id:'travel_type_select', value:'hotel'  },
-          { type:'button', text:{ type:'plain_text', text:'🚗 Cab / Bus', emoji:true },                  action_id:'travel_type_select', value:'cab'    },
-        ]
-      },
-      {
-        type:'actions',
-        elements: [
-          { type:'button', text:{ type:'plain_text', text:'📋 My Requests',    emoji:true }, action_id:'home_my_status'  },
-          { type:'button', text:{ type:'plain_text', text:'📖 Travel Policy',  emoji:true }, action_id:'home_policy'     },
+          { type:'button', text:{ type:'plain_text', text:'🆕 New Travel Request', emoji:true }, style:'primary', action_id:'home_new_travel' },
+          { type:'button', text:{ type:'plain_text', text:'📋 My Requests',        emoji:true },                  action_id:'home_my_status'  }
         ]
       },
       { type:'divider' },
