@@ -611,78 +611,119 @@ async function resolveSlackUser(slackUserId) {
   return USERS_DATA.find(u => u.email.toLowerCase() === email) || null;
 }
 
-function buildTravelModal(triggerId) {
-  return {
-    trigger_id: triggerId,
-    view: {
-      type: 'modal',
-      callback_id: 'travel_form_submit',
-      title: { type: 'plain_text', text: '✈️ New Travel Request' },
-      submit: { type: 'plain_text', text: 'Submit Request' },
-      close: { type: 'plain_text', text: 'Cancel' },
-      blocks: [
-        {
-          type: 'input', block_id: 'b_purpose',
-          label: { type: 'plain_text', text: '📋 Purpose of Travel' },
-          element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Client meeting in Mumbai' } }
-        },
-        {
-          type: 'input', block_id: 'b_from',
-          label: { type: 'plain_text', text: '📍 From City' },
-          element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Delhi' } }
-        },
-        {
-          type: 'input', block_id: 'b_to',
-          label: { type: 'plain_text', text: '📍 To City' },
-          element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Bangalore' } }
-        },
-        {
-          type: 'input', block_id: 'b_date',
-          label: { type: 'plain_text', text: '📅 Travel Date' },
-          element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Pick a date' } }
-        },
-        {
-          type: 'input', block_id: 'b_return', optional: true,
-          label: { type: 'plain_text', text: '📅 Return Date' },
-          hint: { type: 'plain_text', text: 'Must be on or after Travel Date' },
-          element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Pick return date (if applicable)' } }
-        },
-        {
-          type: 'input', block_id: 'b_modes',
-          label: { type: 'plain_text', text: '🚀 Mode of Travel' },
-          element: {
-            type: 'radio_buttons', action_id: 'val',
-            options: [
-              { text: { type: 'plain_text', text: '✈️ Flight' }, value: 'Flight' },
-              { text: { type: 'plain_text', text: '🚂 Train' },  value: 'Train'  },
-              { text: { type: 'plain_text', text: '🚌 Bus' },    value: 'Bus'    },
-              { text: { type: 'plain_text', text: '🏨 Hotel' },  value: 'Hotel'  }
-            ]
-          }
-        },
-        {
-          type: 'input', block_id: 'b_pref_time', optional: true,
-          label: { type: 'plain_text', text: '⏰ Preferred Departure Time' },
-          hint: { type: 'plain_text', text: 'Select your preferred time slot for departure' },
-          element: {
-            type: 'radio_buttons', action_id: 'val',
-            options: [
-              { text: { type: 'plain_text', text: '🌅 Morning  (6 AM – 12 PM)'  }, value: 'Morning (6 AM – 12 PM)'   },
-              { text: { type: 'plain_text', text: '☀️ Afternoon (12 PM – 5 PM)' }, value: 'Afternoon (12 PM – 5 PM)' },
-              { text: { type: 'plain_text', text: '🌆 Evening  (5 PM – 9 PM)'   }, value: 'Evening (5 PM – 9 PM)'    },
-              { text: { type: 'plain_text', text: '🌙 Night    (9 PM – 6 AM)'   }, value: 'Night (9 PM – 6 AM)'      }
-            ]
-          }
-        },
-        {
-          type: 'input', block_id: 'b_notes', optional: true,
-          label: { type: 'plain_text', text: '📝 Notes (Optional)' },
-          hint: { type: 'plain_text', text: '⚠️ If travel date is within 3 days, mention Function Head approval reference here' },
-          element: { type: 'plain_text_input', action_id: 'val', multiline: true, placeholder: { type: 'plain_text', text: 'Any special requirements or approval reference for urgent requests...' } }
-        }
-      ]
+function buildTravelModalBlocks(hotelSelected) {
+  const blocks = [
+    {
+      type: 'input', block_id: 'b_purpose',
+      label: { type: 'plain_text', text: '📋 Purpose of Travel' },
+      element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Client meeting in Mumbai' } }
+    },
+    {
+      type: 'input', block_id: 'b_from',
+      label: { type: 'plain_text', text: '📍 From City' },
+      element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Delhi' } }
+    },
+    {
+      type: 'input', block_id: 'b_to',
+      label: { type: 'plain_text', text: '📍 To City' },
+      element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Bangalore' } }
+    },
+    {
+      type: 'input', block_id: 'b_date',
+      label: { type: 'plain_text', text: '📅 Travel Date' },
+      element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Pick a date' } }
+    },
+    {
+      type: 'input', block_id: 'b_return', optional: true,
+      label: { type: 'plain_text', text: '📅 Return Date' },
+      hint: { type: 'plain_text', text: 'Must be on or after Travel Date' },
+      element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Pick return date (if applicable)' } }
+    },
+    {
+      type: 'input', block_id: 'b_modes',
+      label: { type: 'plain_text', text: '🚀 Mode of Travel' },
+      element: {
+        type: 'radio_buttons', action_id: 'val',
+        options: [
+          { text: { type: 'plain_text', text: '✈️ Flight' }, value: 'Flight' },
+          { text: { type: 'plain_text', text: '🚂 Train' },  value: 'Train'  },
+          { text: { type: 'plain_text', text: '🚌 Bus' },    value: 'Bus'    }
+        ]
+      }
+    },
+    {
+      type: 'input', block_id: 'b_hotel', optional: true,
+      dispatch_action: true,
+      label: { type: 'plain_text', text: '🏨 Hotel Accommodation' },
+      hint: { type: 'plain_text', text: 'Check if you also need hotel stay' },
+      element: {
+        type: 'checkboxes', action_id: 'hotel_toggle',
+        options: [
+          { text: { type: 'plain_text', text: '🏨 Yes, I need hotel accommodation', emoji: true }, value: 'Hotel' }
+        ]
+      }
     }
+  ];
+
+  if (hotelSelected) {
+    blocks.push(
+      {
+        type: 'input', block_id: 'b_checkin',
+        label: { type: 'plain_text', text: '📅 Hotel Check-in Date' },
+        element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Check-in date' } }
+      },
+      {
+        type: 'input', block_id: 'b_checkout',
+        label: { type: 'plain_text', text: '📅 Hotel Check-out Date' },
+        element: { type: 'datepicker', action_id: 'val', placeholder: { type: 'plain_text', text: 'Check-out date' } }
+      },
+      {
+        type: 'input', block_id: 'b_hotel_loc', optional: true,
+        label: { type: 'plain_text', text: '📍 Preferred Hotel Location' },
+        element: { type: 'plain_text_input', action_id: 'val', placeholder: { type: 'plain_text', text: 'e.g. Near office, City center, Airport...' } }
+      }
+    );
+  }
+
+  blocks.push(
+    {
+      type: 'input', block_id: 'b_pref_time', optional: true,
+      label: { type: 'plain_text', text: '⏰ Preferred Departure Time' },
+      hint: { type: 'plain_text', text: 'Select your preferred time slot for departure' },
+      element: {
+        type: 'radio_buttons', action_id: 'val',
+        options: [
+          { text: { type: 'plain_text', text: '🌅 Morning  (6 AM – 12 PM)'  }, value: 'Morning (6 AM – 12 PM)'   },
+          { text: { type: 'plain_text', text: '☀️ Afternoon (12 PM – 5 PM)' }, value: 'Afternoon (12 PM – 5 PM)' },
+          { text: { type: 'plain_text', text: '🌆 Evening  (5 PM – 9 PM)'   }, value: 'Evening (5 PM – 9 PM)'    },
+          { text: { type: 'plain_text', text: '🌙 Night    (9 PM – 6 AM)'   }, value: 'Night (9 PM – 6 AM)'      }
+        ]
+      }
+    },
+    {
+      type: 'input', block_id: 'b_notes', optional: true,
+      label: { type: 'plain_text', text: '📝 Notes (Optional)' },
+      hint: { type: 'plain_text', text: '⚠️ If travel date is within 3 days, mention Function Head approval reference here' },
+      element: { type: 'plain_text_input', action_id: 'val', multiline: true, placeholder: { type: 'plain_text', text: 'Any special requirements or approval reference for urgent requests...' } }
+    }
+  );
+
+  return blocks;
+}
+
+function buildTravelModalView(hotelSelected) {
+  return {
+    type: 'modal',
+    callback_id: 'travel_form_submit',
+    title: { type: 'plain_text', text: '✈️ New Travel Request' },
+    submit: { type: 'plain_text', text: 'Submit Request' },
+    close: { type: 'plain_text', text: 'Cancel' },
+    blocks: buildTravelModalBlocks(hotelSelected)
   };
+}
+
+function buildTravelModal(triggerId) {
+  return { trigger_id: triggerId, view: buildTravelModalView(false) };
 }
 
 async function openBotDM(userId) {
@@ -796,7 +837,7 @@ app.get('/api/slack/scopes', async (req, res) => {
   res.json(scopes);
 });
 
-app.get('/api/version', (req, res) => res.json({ version: 'modal-debug-v3', convs: TRAVEL_CONVS.size }));
+app.get('/api/version', (req, res) => res.json({ version: 'hotel-dynamic-v4', convs: TRAVEL_CONVS.size }));
 app.get('/api/slack/last-action', (req, res) => res.json({ lastAction: lastActionLog }));
 
 // Test: check if bot token has views:write scope (will get invalid_trigger, NOT missing_scope if token is fine)
@@ -1051,12 +1092,25 @@ app.post('/slack/actions', async (req, res) => {
     const fromCity = v.b_from?.val?.value    || '';
     const toCity   = v.b_to?.val?.value      || '';
     const mode          = v.b_modes?.val?.selected_option?.value || '';
-    const modes         = mode ? [mode] : [];
+    const hotelChecked  = (v.b_hotel?.hotel_toggle?.selected_options || []).some(o => o.value === 'Hotel');
+    const modes         = mode ? (hotelChecked ? [mode, 'Hotel'] : [mode]) : (hotelChecked ? ['Hotel'] : []);
+    const checkin       = v.b_checkin?.val?.selected_date  || '';
+    const checkout      = v.b_checkout?.val?.selected_date || '';
+    const hotelLoc      = v.b_hotel_loc?.val?.value        || '';
     const prefTime      = v.b_pref_time?.val?.selected_option?.value || '';
     const priority      = 'Normal';
     const notes         = v.b_notes?.val?.value || '';
     const approvalFileId = '';
     const approvalFileName = '';
+
+    // Validate hotel dates
+    if (hotelChecked) {
+      const errors = {};
+      if (!checkin)  errors.b_checkin  = 'Check-in date is required when hotel is selected';
+      if (!checkout) errors.b_checkout = 'Check-out date is required when hotel is selected';
+      if (checkin && checkout && checkout < checkin) errors.b_checkout = `Check-out (${checkout}) cannot be before check-in (${checkin})`;
+      if (Object.keys(errors).length) return res.json({ response_action: 'errors', errors });
+    }
 
     const reqId = nextBotReqId();
     const today = new Date().toISOString().split('T')[0];
@@ -1069,6 +1123,7 @@ app.post('/slack/actions', async (req, res) => {
       employeeSlackId: slackUser.id,
       dept: user.dept, manager: user.manager || '', functionHead: user.functionHead || '',
       purpose, fromCity, toCity, travelDate, returnDate, types: modes, prefTime, priority, notes,
+      checkin, checkout, hotelLoc,
       approvalFileId, approvalFileName,
       status: isFunctionHead ? 'PENDING_TRAVEL_DESK' : 'PENDING_FUNCTION_HEAD', createdAt: today
     };
@@ -1127,6 +1182,16 @@ app.post('/slack/actions', async (req, res) => {
   const responseUrl = payload.response_url;
   const slackUser   = payload.user || {};
   if (!action) return;
+
+  // ── Hotel checkbox toggled inside modal → dynamically update modal ──
+  if (payload.view?.type === 'modal' && payload.view?.callback_id === 'travel_form_submit' && action.action_id === 'hotel_toggle') {
+    const hotelSelected = (action.selected_options || []).some(o => o.value === 'Hotel');
+    console.log(`[modal:hotel_toggle] hotelSelected=${hotelSelected} view_id=${payload.view.id}`);
+    const r = await slackAPI('views.update', { view_id: payload.view.id, view: buildTravelModalView(hotelSelected) })
+      .catch(e => { console.log('[modal:update] error:', e.message); return null; });
+    console.log('[modal:update] response:', JSON.stringify(r));
+    return;
+  }
 
   const actionId = action.action_id;
   console.log(`[actions] type=${payload.type} actionId=${actionId} userId=${slackUser.id} userName=${slackUser.username}`);
