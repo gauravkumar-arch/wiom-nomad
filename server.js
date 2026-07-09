@@ -165,7 +165,7 @@ function saveConvs() {
   try {
     const obj = {};
     for (const [k, v] of TRAVEL_CONVS.entries()) {
-      obj[k] = { step:v.step, data:v.data, user:v.user, ch:v.ch, savedAt:Date.now() };
+      obj[k] = { type:v.type||'flight', step:v.step, data:v.data, user:v.user, ch:v.ch, savedAt:Date.now() };
     }
     fs.writeFileSync(CONVS_FILE, JSON.stringify(obj), 'utf8');
   } catch(e) { console.log('[convs] save failed:', e.message); }
@@ -183,33 +183,144 @@ function loadConvs() {
 }
 loadConvs();
 
-// Steps with buttons: user clicks → block_action → no message.im needed
-// Steps without buttons: user types /travel [answer] OR replies in DM
-const CONV_STEPS = [
-  { key:'purpose',    label:'Purpose of Travel', prompt:'📋 *What is the purpose of your travel?*\n_e.g. Client meeting, vendor visit, training_' },
-  { key:'fromCity',   label:'From City',         prompt:'📍 *Which city are you traveling from?*\n_e.g. Delhi_' },
-  { key:'toCity',     label:'To City',           prompt:'📍 *Which city are you traveling to?*\n_e.g. Mumbai_' },
-  { key:'travelDate', label:'Travel Date',       prompt:'📅 *What is your travel date?*\n_Format: DD-MM-YYYY  •  e.g. 15-07-2026_' },
-  { key:'returnDate', label:'Return Date',       prompt:'📅 *What is the return date?*\n_Format: DD-MM-YYYY  •  or skip if one-way_', optional:true },
-  {
-    key:'mode', label:'Mode of Travel', prompt:'🚀 *Select your mode of travel:*',
-    buttons:[
-      { text:'✈️ Flight', value:'Flight' }, { text:'🚂 Train', value:'Train' },
-      { text:'🚌 Bus',    value:'Bus' },    { text:'🏨 Hotel', value:'Hotel' }
+// ── Multi-mode booking flows ──
+const BOOKING_FLOWS = {
+  flight: {
+    name: 'Flight Booking', emoji: '✈️',
+    steps: [
+      { key:'purpose',    label:'Purpose',         prompt:'📋 *What is the purpose of this trip?*\n_e.g. Client meeting, conference, training_' },
+      { key:'fromCity',   label:'From City',        prompt:'📍 *Flying from which city?*\n_e.g. Delhi, Mumbai_' },
+      { key:'toCity',     label:'To City',          prompt:'📍 *Flying to which city?*\n_e.g. Bangalore, Chennai_' },
+      { key:'travelDate', label:'Travel Date',      prompt:'📅 *Travel date?*\n_Format: DD-MM-YYYY  •  e.g. 15-07-2026_' },
+      { key:'returnDate', label:'Return Date',      prompt:'📅 *Return date?*\n_Format: DD-MM-YYYY  •  skip if one-way_', optional:true },
+      { key:'class',      label:'Class',            prompt:'💺 *Preferred class?*',
+        buttons:[{ text:'Economy', value:'Economy' },{ text:'Business Class', value:'Business Class' }] },
+      { key:'prefTime',   label:'Preferred Time',   prompt:'⏰ *Preferred departure time:*', optional:true,
+        buttons:[
+          { text:'🌅 Morning (6AM–12PM)',   value:'Morning (6AM–12PM)'   },
+          { text:'☀️ Afternoon (12PM–6PM)', value:'Afternoon (12PM–6PM)' },
+          { text:'🌆 Evening (6PM–10PM)',   value:'Evening (6PM–10PM)'   },
+          { text:'⏩ No Preference',         value:'__skip__'             }
+        ]},
+      { key:'notes', label:'Notes', prompt:'📝 *Any special requirements?*\n_e.g. Aisle seat, vegetarian meal — or skip_', optional:true },
     ]
   },
-  {
-    key:'prefTime', label:'Preferred Departure Time', prompt:'⏰ *Preferred departure time:*', optional:true,
-    buttons:[
-      { text:'🌅 Morning (6AM–12PM)',    value:'Morning (6 AM – 12 PM)'   },
-      { text:'☀️ Afternoon (12PM–5PM)', value:'Afternoon (12 PM – 5 PM)' },
-      { text:'🌆 Evening (5PM–9PM)',    value:'Evening (5 PM – 9 PM)'    },
-      { text:'🌙 Night (9PM–6AM)',      value:'Night (9 PM – 6 AM)'      },
-      { text:'⏩ Skip',                  value:'__skip__'                 }
+  train: {
+    name: 'Train Booking', emoji: '🚂',
+    steps: [
+      { key:'purpose',    label:'Purpose',     prompt:'📋 *Purpose of this trip?*\n_e.g. Client visit, branch meeting_' },
+      { key:'fromCity',   label:'From City',   prompt:'📍 *Boarding from which city?*' },
+      { key:'toCity',     label:'To City',     prompt:'📍 *Destination city?*' },
+      { key:'travelDate', label:'Travel Date', prompt:'📅 *Travel date?*\n_Format: DD-MM-YYYY_' },
+      { key:'returnDate', label:'Return Date', prompt:'📅 *Return date?*\n_Format: DD-MM-YYYY  •  skip if one-way_', optional:true },
+      { key:'class',      label:'Class',       prompt:'🚂 *Preferred class?*',
+        buttons:[
+          { text:'Sleeper (SL)', value:'Sleeper (SL)' },
+          { text:'3rd AC (3A)',  value:'3rd AC (3A)'  },
+          { text:'2nd AC (2A)',  value:'2nd AC (2A)'  },
+          { text:'1st AC (1A)',  value:'1st AC (1A)'  }
+        ]},
+      { key:'notes', label:'Notes', prompt:'📝 *Any requirements?*\n_e.g. Lower berth, specific train — or skip_', optional:true },
     ]
   },
-  { key:'notes', label:'Notes', prompt:'📝 *Any notes or special requirements?*\n_or skip if none_', optional:true },
-];
+  hotel: {
+    name: 'Hotel Booking', emoji: '🏨',
+    steps: [
+      { key:'purpose',  label:'Purpose',      prompt:'📋 *Purpose of stay?*\n_e.g. Outstation meeting, conference_' },
+      { key:'city',     label:'City',         prompt:'📍 *Hotel required in which city?*' },
+      { key:'checkIn',  label:'Check-in',     prompt:'📅 *Check-in date?*\n_Format: DD-MM-YYYY_' },
+      { key:'checkOut', label:'Check-out',    prompt:'📅 *Check-out date?*\n_Format: DD-MM-YYYY_' },
+      { key:'guests',   label:'Guests/Rooms', prompt:'👥 *Number of guests / rooms needed?*\n_e.g. 1 person, 1 room_' },
+      { key:'budget',   label:'Budget',       prompt:'💰 *Budget preference?*',
+        buttons:[
+          { text:'Budget (< ₹2000/night)',        value:'Budget (<₹2000/night)'        },
+          { text:'Standard (₹2000–5000/night)',   value:'Standard (₹2000–5000/night)'  },
+          { text:'Premium (> ₹5000/night)',       value:'Premium (>₹5000/night)'       }
+        ]},
+      { key:'notes', label:'Notes', prompt:'📝 *Any preferences?*\n_e.g. Near airport, AC room — or skip_', optional:true },
+    ]
+  },
+  cab: {
+    name: 'Cab / Bus Booking', emoji: '🚗',
+    steps: [
+      { key:'purpose',    label:'Purpose',    prompt:'📋 *Purpose of travel?*\n_e.g. Airport pickup, client visit_' },
+      { key:'type',       label:'Type',       prompt:'🚗 *What do you need?*',
+        buttons:[
+          { text:'🚖 Cab – Local',       value:'Cab – Local'       },
+          { text:'🚗 Cab – Outstation',  value:'Cab – Outstation'  },
+          { text:'🚌 Bus',               value:'Bus'               }
+        ]},
+      { key:'fromCity',   label:'Pickup',     prompt:'📍 *Pickup location?*\n_e.g. Office, home address, city_' },
+      { key:'toCity',     label:'Drop',       prompt:'📍 *Drop location?*\n_e.g. Airport, hotel, client office_' },
+      { key:'travelDate', label:'Date/Time',  prompt:'📅 *Travel date & preferred time?*\n_e.g. 15-07-2026 at 8:00 AM_' },
+      { key:'notes',      label:'Notes',      prompt:'📝 *Any requirements?*\n_e.g. 4-seater, AC — or skip_', optional:true },
+    ]
+  }
+};
+
+// Backward-compat alias (used in older code paths)
+const CONV_STEPS = BOOKING_FLOWS.flight.steps;
+
+function getSteps(type) { return BOOKING_FLOWS[type]?.steps || CONV_STEPS; }
+
+// ── Travel policies ──
+const TRAVEL_POLICIES = {
+  flight:  `*✈️ Flight Travel Policy*\n\n• *Booking:* MyBiz (MakeMyTrip Corporate)\n• *Class:* Economy (Business for VP & above)\n• *Advance Booking:* Min 48 hours before travel\n• *Cancellation:* Up to 24 hours before departure\n• *Approval:* Function Head → Travel Desk\n\n_Questions? Contact: travel@wiom.in_`,
+  train:   `*🚂 Train Travel Policy*\n\n• *Booking:* IRCTC via MyBiz\n• *Class:* 3rd AC (default)\n   — 2nd AC: Manager & above\n   — 1st AC: VP & above\n• *Tatkal:* Allowed in emergencies with manager approval\n• *Approval:* Function Head → Travel Desk\n\n_Questions? Contact: travel@wiom.in_`,
+  hotel:   `*🏨 Hotel Stay Policy*\n\n• *Booking:* MyBiz approved hotels only\n• *Budget Limits:*\n   — Executive: ₹2,500/night\n   — Manager: ₹3,500/night\n   — VP & above: ₹6,000/night\n• *Extended Stay (>7 days):* Prior approval required\n• *Approval:* Function Head → Travel Desk\n\n_Questions? Contact: travel@wiom.in_`,
+  bus_cab: `*🚗 Cab & Bus Policy*\n\n• *Local Cab:* Up to ₹800/day — no prior approval needed\n• *Outstation Cab:* Function Head approval required\n• *App-based:* Ola/Uber allowed — receipt mandatory\n• *Airport:* Prepaid/app cab only (no auto)\n• *Bus:* KSRTC/MSRTC preferred for short distances\n\n_Questions? Contact: travel@wiom.in_`
+};
+
+// ── Intent detection from natural language ──
+function detectTravelIntent(msg) {
+  const m = msg.toLowerCase();
+  if (/flight|fly|plane|aeroplane|airplane|udaan/.test(m))       return 'flight';
+  if (/train|rail|irctc|railway|rail/.test(m))                   return 'train';
+  if (/hotel|stay|room|accommodation|lodge|ruk/.test(m))         return 'hotel';
+  if (/cab|taxi|bus|car|ola|uber|gaadi|vehicle/.test(m))         return 'cab';
+  if (/policy|niti|rule|limit|allowance|kitna/.test(m))          return 'policy';
+  if (/travel|book|yatra|trip|request|jaana|jana/.test(m))       return 'menu';
+  if (/help|\?|kya|kaise|what|how/.test(m))                      return 'help';
+  return null;
+}
+
+async function sendTravelMenu(userId, ch, userName) {
+  await slackAPI('chat.postMessage', {
+    channel: ch,
+    blocks: [
+      { type:'section', text:{ type:'mrkdwn', text:`Hi *${userName || 'there'}*! 👋 What would you like to book?\n\n_Click a button below to get started:_` } },
+      {
+        type:'actions', block_id:'travel_menu',
+        elements: [
+          { type:'button', text:{ type:'plain_text', text:'✈️ Flight',    emoji:true }, action_id:'travel_type_select', value:'flight'  },
+          { type:'button', text:{ type:'plain_text', text:'🚂 Train',     emoji:true }, action_id:'travel_type_select', value:'train'   },
+          { type:'button', text:{ type:'plain_text', text:'🏨 Hotel',     emoji:true }, action_id:'travel_type_select', value:'hotel'   },
+          { type:'button', text:{ type:'plain_text', text:'🚗 Cab / Bus', emoji:true }, action_id:'travel_type_select', value:'cab'     },
+        ]
+      }
+    ],
+    text: 'What would you like to book? Flight, Train, Hotel, or Cab/Bus?'
+  });
+}
+
+async function sendPolicyMenu(userId, ch) {
+  await slackAPI('chat.postMessage', {
+    channel: ch,
+    blocks: [
+      { type:'section', text:{ type:'mrkdwn', text:`📖 *Travel Policy* — Select a category:` } },
+      {
+        type:'actions', block_id:'policy_menu',
+        elements: [
+          { type:'button', text:{ type:'plain_text', text:'✈️ Flight',    emoji:true }, action_id:'policy_type_select', value:'flight'  },
+          { type:'button', text:{ type:'plain_text', text:'🚂 Train',     emoji:true }, action_id:'policy_type_select', value:'train'   },
+          { type:'button', text:{ type:'plain_text', text:'🏨 Hotel',     emoji:true }, action_id:'policy_type_select', value:'hotel'   },
+          { type:'button', text:{ type:'plain_text', text:'🚗 Cab / Bus', emoji:true }, action_id:'policy_type_select', value:'bus_cab' },
+        ]
+      }
+    ],
+    text: 'Select a category to see the travel policy.'
+  });
+}
 
 // Build the Slack message payload for a given step
 function buildStepMessage(step, stepNum, total) {
@@ -236,18 +347,39 @@ function buildStepMessage(step, stepNum, total) {
   }
 }
 
-function buildConfirmBlock(data) {
-  const lines = [
-    `*📋 Purpose:* ${data.purpose}`,
-    `*📍 Route:* ${data.fromCity} → ${data.toCity}`,
-    `*📅 Travel Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ' _(one-way)_'}`,
-    `*🚀 Mode:* ${data.mode}`,
-    data.prefTime ? `*⏰ Preferred Time:* ${data.prefTime}` : null,
-    data.notes    ? `*📝 Notes:* ${data.notes}` : null,
-  ].filter(Boolean).join('\n');
+function buildConfirmBlock(data, type) {
+  const flow = BOOKING_FLOWS[type] || BOOKING_FLOWS.flight;
+  let lines;
+  if (type === 'hotel') {
+    lines = [
+      `*📋 Purpose:* ${data.purpose}`,
+      `*📍 City:* ${data.city}`,
+      `*📅 Check-in:* ${data.checkIn}  →  Check-out: ${data.checkOut}`,
+      `*👥 Guests/Rooms:* ${data.guests}`,
+      `*💰 Budget:* ${data.budget}`,
+      data.notes ? `*📝 Notes:* ${data.notes}` : null,
+    ].filter(Boolean).join('\n');
+  } else if (type === 'cab') {
+    lines = [
+      `*📋 Purpose:* ${data.purpose}`,
+      `*🚗 Type:* ${data.type}`,
+      `*📍 Route:* ${data.fromCity} → ${data.toCity}`,
+      `*📅 Date/Time:* ${data.travelDate}`,
+      data.notes ? `*📝 Notes:* ${data.notes}` : null,
+    ].filter(Boolean).join('\n');
+  } else {
+    lines = [
+      `*📋 Purpose:* ${data.purpose}`,
+      `*📍 Route:* ${data.fromCity} → ${data.toCity}`,
+      `*📅 Travel Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ' _(one-way)_'}`,
+      data.class    ? `*💺 Class:* ${data.class}` : null,
+      data.prefTime ? `*⏰ Preferred Time:* ${data.prefTime}` : null,
+      data.notes    ? `*📝 Notes:* ${data.notes}` : null,
+    ].filter(Boolean).join('\n');
+  }
   return {
     blocks: [
-      { type:'section', text:{ type:'mrkdwn', text:`✅ *Review your travel request:*\n\n${lines}` } },
+      { type:'section', text:{ type:'mrkdwn', text:`✅ *Review your ${flow.emoji} ${flow.name}:*\n\n${lines}` } },
       {
         type:'actions', block_id:'conv_confirm',
         elements: [
@@ -269,47 +401,54 @@ function parseDateInput(input) {
   return null;
 }
 
-async function startTravelConversation(userId) {
-  // True race condition (two requests in same ms) — silent ignore
+async function startTravelConversation(userId, type) {
+  type = type || 'flight'; // default to flight if not specified
+  const steps = getSteps(type);
+  const flow  = BOOKING_FLOWS[type];
+
+  // True race condition — silent ignore
   if (CONV_STARTING.has(userId)) {
     console.log(`[conv:start] race-condition duplicate ignored for ${userId}`);
     return;
   }
-  // Active conversation already exists — remind the user instead of silently blocking
+  // Active conversation — remind user
   const existing = TRAVEL_CONVS.get(userId);
   if (existing) {
-    console.log(`[conv:start] already active for ${userId} at step ${existing.step}, reminding user`);
+    console.log(`[conv:start] already active for ${userId} type=${existing.type} step=${existing.step}`);
     const ch = existing.ch || await openBotDM(userId).catch(() => null);
     if (ch) {
-      const step = CONV_STEPS[existing.step];
-      const stepMsg = step ? buildStepMessage(step, existing.step + 1, CONV_STEPS.length) : null;
+      const existSteps = getSteps(existing.type);
+      const step = existSteps[existing.step];
+      const stepMsg = step ? buildStepMessage(step, existing.step + 1, existSteps.length) : null;
+      const flowName = BOOKING_FLOWS[existing.type]?.name || 'travel request';
       await slackAPI('chat.postMessage', {
         channel: ch,
         ...(stepMsg || {}),
-        text: `You already have a travel request in progress (Step ${existing.step + 1} of ${CONV_STEPS.length}).\n\n${stepMsg?.text || step?.prompt || ''}\n\n_Type \`/travel cancel\` to cancel and start fresh._`
+        text: `You already have a *${flowName}* in progress (Step ${existing.step + 1} of ${existSteps.length}).\n\n${stepMsg?.text || step?.prompt || ''}\n\n_Type \`/travel cancel\` to cancel and start a new request._`
       });
     }
     return;
   }
-  CONV_STARTING.add(userId); // claim the slot synchronously before first await
+
+  CONV_STARTING.add(userId);
   try {
-    console.log(`[conv:start] userId=${userId}`);
+    console.log(`[conv:start] userId=${userId} type=${type}`);
     const user = await resolveSlackUser(userId).catch(e => { console.log('[conv:start] resolveUser error:', e.message); return null; });
     const ch   = await openBotDM(userId).catch(e => { console.log('[conv:start] openDM error:', e.message); return null; });
     if (!ch) { console.log('[conv:start] no DM channel, abort'); return; }
     if (!user) {
       console.log(`[conv:start] user not found for Slack ID ${userId}`);
-      await slackAPI('chat.postMessage', { channel:ch, text:'❌ Your email is not registered in Wiom Pravash. Contact Travel Desk: gaurav.kumar@wiom.in' });
+      await slackAPI('chat.postMessage', { channel:ch, text:'❌ Your email is not registered in Wiom Pravash. Contact: gaurav.kumar@wiom.in' });
       return;
     }
-    TRAVEL_CONVS.set(userId, { step:0, data:{}, user, ch });
+    TRAVEL_CONVS.set(userId, { type, step:0, data:{}, user, ch });
     saveConvs();
-    console.log(`[conv:start] started for ${user.name} (${user.email}), ch=${ch}`);
-    const stepMsg = buildStepMessage(CONV_STEPS[0], 1, CONV_STEPS.length);
+    console.log(`[conv:start] started ${type} for ${user.name} (${user.email})`);
+    const stepMsg = buildStepMessage(steps[0], 1, steps.length);
     await slackAPI('chat.postMessage', {
       channel: ch,
       ...stepMsg,
-      text: `Hi *${user.name}*! 👋 New travel request started.\n\n${stepMsg.text || CONV_STEPS[0].prompt}\n\n_Type \`/travel cancel\` at any time to stop._`
+      text: `Hi *${user.name}*! 👋 *${flow.emoji} ${flow.name}* started.\n\n${stepMsg.text || steps[0].prompt}\n\n_Type \`/travel cancel\` at any time to stop._`
     });
   } finally {
     CONV_STARTING.delete(userId);
@@ -320,59 +459,61 @@ async function handleConversationReply(userId, rawText, ch) {
   const conv = TRAVEL_CONVS.get(userId);
   if (!conv) { console.log(`[conv:reply] no conv found for userId=${userId}`); return false; }
 
+  const steps = getSteps(conv.type);
   const input = rawText.trim();
-  console.log(`[conv:reply] userId=${userId} step=${conv.step} input="${input.substring(0,40)}"`);
+  console.log(`[conv:reply] userId=${userId} type=${conv.type} step=${conv.step} input="${input.substring(0,40)}"`);
 
   if (input.toLowerCase() === 'cancel') {
     TRAVEL_CONVS.delete(userId); saveConvs();
-    await slackAPI('chat.postMessage', { channel:ch, text:'❌ Travel request cancelled. Type `/travel` to start again.' });
+    await slackAPI('chat.postMessage', { channel:ch, text:'❌ Request cancelled. Type `/travel` or say "book flight / train / hotel / cab" to start again.' });
     return true;
   }
 
-  // Confirmation step (text path)
-  if (conv.step === CONV_STEPS.length) {
+  // Confirmation step
+  if (conv.step === steps.length) {
     if (input.toLowerCase() === 'confirm') {
       TRAVEL_CONVS.delete(userId); saveConvs();
       await submitTravelConversation(userId, conv, ch);
     } else if (input.toLowerCase() === 'restart') {
-      TRAVEL_CONVS.set(userId, { step:0, data:{}, user:conv.user, ch }); saveConvs();
-      await slackAPI('chat.postMessage', { channel:ch, text:`Let's start over!\n\n*Step 1 of ${CONV_STEPS.length}*\n${CONV_STEPS[0].prompt}` });
+      TRAVEL_CONVS.set(userId, { type:conv.type, step:0, data:{}, user:conv.user, ch }); saveConvs();
+      const stepMsg = buildStepMessage(steps[0], 1, steps.length);
+      await slackAPI('chat.postMessage', { channel:ch, ...stepMsg, text:`🔄 Restarted!\n\n${stepMsg.text || steps[0].prompt}` });
     } else {
-      await slackAPI('chat.postMessage', { channel:ch, text:'Type *confirm* to submit  •  *restart* to start over  •  *cancel* to stop.' });
+      await slackAPI('chat.postMessage', { channel:ch, text:'Click *Submit Request* to confirm  •  *Restart* to change answers  •  *Cancel* to stop.' });
     }
     return true;
   }
 
-  const step = CONV_STEPS[conv.step];
+  const step = steps[conv.step];
 
   if (input.toLowerCase() === 'skip' && step.optional) {
     conv.data[step.key] = '';
     return await advanceConversation(userId, conv, ch);
   }
 
-  // Button steps are handled via /slack/actions — but also accept text if user typed it
+  // Button steps — also accept text input
   if (step.buttons) {
     const chosen = step.buttons.find(b =>
       b.value !== '__skip__' && b.text.toLowerCase().includes(input.toLowerCase())
     ) || step.buttons.find(b =>
       b.value !== '__skip__' && b.value.toLowerCase().startsWith(input.toLowerCase())
     );
-    if (chosen) {
-      conv.data[step.key] = chosen.value;
-      return await advanceConversation(userId, conv, ch);
-    }
-    await slackAPI('chat.postMessage', { channel:ch, text:`Please click one of the buttons above, or type the option name.\n\n${step.prompt}` });
+    if (chosen) { conv.data[step.key] = chosen.value; return await advanceConversation(userId, conv, ch); }
+    await slackAPI('chat.postMessage', { channel:ch, text:`Please click one of the buttons above.\n\n${step.prompt}` });
     return true;
   }
 
-  if (step.key === 'travelDate' || step.key === 'returnDate') {
+  // Date fields
+  const isDateKey = ['travelDate','returnDate','checkIn','checkOut'].includes(step.key);
+  if (isDateKey) {
     const parsed = parseDateInput(input);
     if (!parsed) {
-      await slackAPI('chat.postMessage', { channel:ch, text:`❌ Invalid date format. Please use DD-MM-YYYY\n_e.g. 15-07-2026_` });
+      await slackAPI('chat.postMessage', { channel:ch, text:`❌ Invalid date. Use DD-MM-YYYY (e.g. 15-07-2026)` });
       return true;
     }
-    if (step.key === 'returnDate' && conv.data.travelDate && parsed < conv.data.travelDate) {
-      await slackAPI('chat.postMessage', { channel:ch, text:`❌ Return date can't be before travel date (${conv.data.travelDate}). Try again:` });
+    const refDate = step.key === 'returnDate' ? conv.data.travelDate : (step.key === 'checkOut' ? conv.data.checkIn : null);
+    if (refDate && parsed < refDate) {
+      await slackAPI('chat.postMessage', { channel:ch, text:`❌ Date can't be before ${refDate}. Try again:` });
       return true;
     }
     conv.data[step.key] = parsed;
@@ -388,67 +529,75 @@ async function handleConversationReply(userId, rawText, ch) {
 }
 
 async function advanceConversation(userId, conv, ch) {
+  const steps = getSteps(conv.type);
   conv.step++;
   TRAVEL_CONVS.set(userId, conv); saveConvs();
-  console.log(`[conv:advance] userId=${userId} now at step=${conv.step}/${CONV_STEPS.length}`);
+  console.log(`[conv:advance] userId=${userId} type=${conv.type} step=${conv.step}/${steps.length}`);
 
-  if (conv.step < CONV_STEPS.length) {
-    const next    = CONV_STEPS[conv.step];
-    const stepMsg = buildStepMessage(next, conv.step + 1, CONV_STEPS.length);
-    await slackAPI('chat.postMessage', {
-      channel: ch,
-      ...stepMsg,
-      text: `✅ Got it!\n\n${stepMsg.text || next.prompt}`
-    });
+  if (conv.step < steps.length) {
+    const next    = steps[conv.step];
+    const stepMsg = buildStepMessage(next, conv.step + 1, steps.length);
+    await slackAPI('chat.postMessage', { channel:ch, ...stepMsg, text:`✅ Got it!\n\n${stepMsg.text || next.prompt}` });
   } else {
     console.log(`[conv:advance] userId=${userId} all steps done, showing confirm`);
-    const confirmMsg = buildConfirmBlock(conv.data);
-    await slackAPI('chat.postMessage', { channel: ch, ...confirmMsg });
+    const confirmMsg = buildConfirmBlock(conv.data, conv.type);
+    await slackAPI('chat.postMessage', { channel:ch, ...confirmMsg });
   }
   return true;
 }
 
 async function submitTravelConversation(userId, conv, ch) {
-  const { data, user } = conv;
-  console.log(`[conv:submit] userId=${userId} user=${user?.name} route=${data.fromCity}→${data.toCity}`);
+  const { data, user, type } = conv;
+  const flow = BOOKING_FLOWS[type] || BOOKING_FLOWS.flight;
+  console.log(`[conv:submit] userId=${userId} type=${type} user=${user?.name}`);
   const reqId = nextBotReqId();
   const today = new Date().toISOString().split('T')[0];
   const isFunctionHead = user.role === 'function_head';
-  const modes = data.mode ? [data.mode] : [];
+
+  // Build summary line based on type
+  let summaryLine;
+  if (type === 'hotel') {
+    summaryLine = `*City:* ${data.city} | *Stay:* ${data.checkIn} → ${data.checkOut} | *Guests:* ${data.guests} | *Budget:* ${data.budget}`;
+  } else if (type === 'cab') {
+    summaryLine = `*Type:* ${data.type} | *Route:* ${data.fromCity} → ${data.toCity} | *Date:* ${data.travelDate}`;
+  } else {
+    summaryLine = `*Route:* ${data.fromCity} → ${data.toCity} | *Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ''} | *Class:* ${data.class||'—'}`;
+  }
 
   const request = {
-    id:reqId, source:'slack',
-    employeeId:user.id, employeeName:user.name, employeeEmail:user.email,
-    employeeSlackId:userId,
+    id:reqId, source:'slack', bookingType: type,
+    employeeId:user.id, employeeName:user.name, employeeEmail:user.email, employeeSlackId:userId,
     dept:user.dept, manager:user.manager||'', functionHead:user.functionHead||'',
-    purpose:data.purpose, fromCity:data.fromCity, toCity:data.toCity,
-    travelDate:data.travelDate, returnDate:data.returnDate||'',
-    types:modes, prefTime:data.prefTime||'', priority:'Normal',
+    purpose:data.purpose,
+    fromCity:data.fromCity||data.city||'', toCity:data.toCity||'',
+    travelDate:data.travelDate||data.checkIn||'', returnDate:data.returnDate||data.checkOut||'',
+    types:[flow.name], prefTime:data.prefTime||'', priority:'Normal',
     notes:data.notes||'', approvalFileId:'', approvalFileName:'',
-    status: isFunctionHead ? 'PENDING_TRAVEL_DESK' : 'PENDING_FUNCTION_HEAD', createdAt:today
+    status: isFunctionHead ? 'PENDING_TRAVEL_DESK' : 'PENDING_FUNCTION_HEAD', createdAt:today,
+    bookingData: data
   };
   SLACK_REQUESTS.set(reqId, request);
 
-  const statusText = isFunctionHead ? '🎟️ Sent directly to Travel Desk' : '🔷 Pending Function Head Approval';
+  const statusText = isFunctionHead ? '🎟️ Sent to Travel Desk' : '🔷 Pending Function Head Approval';
   await slackAPI('chat.postMessage', {
     channel: ch,
     blocks: [
-      { type:'header', text:{ type:'plain_text', text:'✅ Travel Request Submitted!' } },
-      { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Route:* ${data.fromCity} → ${data.toCity}\n*Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ''}\n*Purpose:* ${data.purpose}\n*Mode:* ${data.mode||'—'}${data.prefTime ? '\n*Preferred Time:* ' + data.prefTime : ''}\n*Status:* ${statusText}` } },
-      { type:'section', text:{ type:'mrkdwn', text:'Use `/travel status` to check anytime.' } }
+      { type:'header', text:{ type:'plain_text', text:`${flow.emoji} ${flow.name} — Submitted!`, emoji:true } },
+      { type:'section', text:{ type:'mrkdwn', text:`*ID:* \`${reqId}\`\n*Purpose:* ${data.purpose}\n${summaryLine}\n*Status:* ${statusText}` } },
+      { type:'section', text:{ type:'mrkdwn', text:'_You will be notified once approved. Use `/travel status` to check anytime._' } }
     ],
-    text: `Travel request ${reqId} submitted!`
+    text: `${flow.name} request ${reqId} submitted!`
   });
 
+  // Notify manager (FYI)
   const mgrUser = USERS_DATA.find(u => u.name === user.manager);
   if (mgrUser?.email) {
-    const mgrText = `:information_source: *New Travel Request — FYI* — \`${reqId}\`\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept})\n:dart: *Purpose:* ${data.purpose}\n:round_pushpin: *Route:* ${data.fromCity} → ${data.toCity}\n:calendar: *Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ''}${data.prefTime ? '\n:alarm_clock: *Preferred Time:* ' + data.prefTime : ''}\n:rocket: *Mode:* ${data.mode||'—'}\n\n_This is for your information.${isFunctionHead ? ' Request sent directly to Travel Desk.' : ' Function Head will approve.'}_`;
-    await dmUser(mgrUser.email, { text:mgrText });
+    await dmUser(mgrUser.email, { text:`:information_source: *${flow.name} Request — FYI* — \`${reqId}\`\n:bust_in_silhouette: *${user.name}* (${user.dept})\n:dart: *Purpose:* ${data.purpose}\n${summaryLine.replace(/\*/g, '')}\n\n_${isFunctionHead ? 'Sent directly to Travel Desk.' : 'Pending Function Head approval.'}_` });
   }
 
   if (isFunctionHead) {
     const tdUsers = USERS_DATA.filter(u => u.role === 'travel_desk');
-    const tdMsg = { text:`:ticket: *Book Tickets — ${reqId}*\n:bust_in_silhouette: *Employee:* ${user.name} (${user.dept}) — _Function Head_\n:dart: *Purpose:* ${data.purpose}\n:round_pushpin: *Route:* ${data.fromCity} → ${data.toCity}\n:calendar: *Date:* ${data.travelDate}${data.returnDate ? ' → ' + data.returnDate : ''}${data.prefTime ? '\n:alarm_clock: *Preferred Time:* ' + data.prefTime : ''}\n:airplane: *Mode:* ${data.mode||'—'}\n:white_check_mark: *Self-approved* (Function Head)\n\nPlease book on MyBiz: https://mybiz.makemytrip.com` };
+    const tdMsg = { text:`${flow.emoji} *${flow.name} — Book Now* — \`${reqId}\`\n:bust_in_silhouette: *${user.name}* (${user.dept}) — _Function Head_\n:dart: *Purpose:* ${data.purpose}\n${summaryLine.replace(/\*/g,'')}\n:white_check_mark: *Self-approved*\n\nBook on MyBiz: https://mybiz.makemytrip.com` };
     await Promise.all(tdUsers.map(td => dmUser(td.email, tdMsg)));
   } else {
     const fhUser = USERS_DATA.find(u => u.name === user.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
@@ -647,7 +796,7 @@ app.get('/api/slack/scopes', async (req, res) => {
   res.json(scopes);
 });
 
-app.get('/api/version', (req, res) => res.json({ version: '662f232-button-fix', convs: TRAVEL_CONVS.size }));
+app.get('/api/version', (req, res) => res.json({ version: 'multi-mode-chatbot-v1', convs: TRAVEL_CONVS.size }));
 app.get('/api/slack/last-action', (req, res) => res.json({ lastAction: lastActionLog }));
 
 // ── Test: simulate double-click on New Travel Request ──
@@ -806,8 +955,17 @@ app.post('/slack/commands', (req, res) => {
   (async () => {
     console.log(`[/travel] user_id=${user_id} text="${rawText.substring(0,40)}" inConv=${TRAVEL_CONVS.has(user_id)}`);
     // ── Keywords that always work regardless of conversation state ──
-    if (!sub || sub === 'new' || sub === 'request') {
-      return startTravelConversation(user_id);
+    if (sub === 'flight' || sub === 'fly')             return startTravelConversation(user_id, 'flight');
+    if (sub === 'train' || sub === 'rail')             return startTravelConversation(user_id, 'train');
+    if (sub === 'hotel' || sub === 'stay')             return startTravelConversation(user_id, 'hotel');
+    if (sub === 'cab' || sub === 'bus' || sub === 'car') return startTravelConversation(user_id, 'cab');
+    if (!sub || sub === 'new' || sub === 'request' || sub === 'book') {
+      const dmCh = await openBotDM(user_id).catch(() => null);
+      if (dmCh) return sendTravelMenu(user_id, dmCh);
+    }
+    if (sub === 'policy') {
+      const dmCh = await openBotDM(user_id).catch(() => null);
+      if (dmCh) return sendPolicyMenu(user_id, dmCh);
     }
     if (sub === 'status' || sub === 'mystatus') {
       return sendBotStatus(user_id);
@@ -1009,9 +1167,32 @@ app.post('/slack/actions', async (req, res) => {
     return;
   }
 
-  // ── App Home button: start travel conversation ──
+  // ── App Home button: show travel type menu ──
   if (actionId === 'home_new_travel') {
-    await startTravelConversation(slackUser.id).catch(e => console.log('[AppHome] conv start:', e.message));
+    const dmCh = await openBotDM(slackUser.id).catch(() => null);
+    if (dmCh) await sendTravelMenu(slackUser.id, dmCh, slackUser.real_name || slackUser.name).catch(e => console.log('[AppHome] menu:', e.message));
+    return;
+  }
+
+  // ── Travel type selected from menu ──
+  if (actionId === 'travel_type_select') {
+    await startTravelConversation(slackUser.id, action.value).catch(e => console.log('[travel_type_select]', e.message));
+    return;
+  }
+
+  // ── App Home: show policy menu ──
+  if (actionId === 'home_policy') {
+    const dmCh = await openBotDM(slackUser.id).catch(() => null);
+    if (dmCh) await sendPolicyMenu(slackUser.id, dmCh).catch(e => console.log('[home_policy]', e.message));
+    return;
+  }
+
+  // ── Policy type selected ──
+  if (actionId === 'policy_type_select') {
+    const dmCh = await openBotDM(slackUser.id).catch(() => null);
+    if (dmCh && TRAVEL_POLICIES[action.value]) {
+      await slackAPI('chat.postMessage', { channel:dmCh, text: TRAVEL_POLICIES[action.value] });
+    }
     return;
   }
 
@@ -1228,8 +1409,17 @@ async function publishHomeView(userId) {
       {
         type:'actions',
         elements: [
-          { type:'button', text:{ type:'plain_text', text:'🆕 New Travel Request', emoji:true }, style:'primary', action_id:'home_new_travel' },
-          { type:'button', text:{ type:'plain_text', text:'📋 My Requests', emoji:true },         action_id:'home_my_status' }
+          { type:'button', text:{ type:'plain_text', text:'✈️ Flight',    emoji:true }, style:'primary', action_id:'travel_type_select', value:'flight' },
+          { type:'button', text:{ type:'plain_text', text:'🚂 Train',     emoji:true },                  action_id:'travel_type_select', value:'train'  },
+          { type:'button', text:{ type:'plain_text', text:'🏨 Hotel',     emoji:true },                  action_id:'travel_type_select', value:'hotel'  },
+          { type:'button', text:{ type:'plain_text', text:'🚗 Cab / Bus', emoji:true },                  action_id:'travel_type_select', value:'cab'    },
+        ]
+      },
+      {
+        type:'actions',
+        elements: [
+          { type:'button', text:{ type:'plain_text', text:'📋 My Requests',    emoji:true }, action_id:'home_my_status'  },
+          { type:'button', text:{ type:'plain_text', text:'📖 Travel Policy',  emoji:true }, action_id:'home_policy'     },
         ]
       },
       { type:'divider' },
@@ -1280,17 +1470,25 @@ app.post('/slack/events', async (req, res) => {
       return;
     }
 
-    if (msg === 'new' || msg === 'travel' || msg === 'submit' || msg === 'request') {
-      await startTravelConversation(userId).catch(e => console.log('[DM new travel] error:', e.message));
-    } else if (msg === 'status' || msg === 'my requests' || msg === 'requests') {
+    if (msg === 'status' || msg === 'my requests' || msg === 'requests') {
       await sendBotStatus(userId).catch(e => console.log('[DM status] error:', e.message));
     } else if (msg === 'help' || msg === '?') {
       await sendBotHelp(userId).catch(e => console.log('[DM help] error:', e.message));
     } else if (msg) {
-      await slackAPI('chat.postMessage', {
-        channel: ch,
-        text: 'Hi! 👋 Type `new` to submit a travel request, `status` to check your requests, or `help` for all commands.\n\nOr use `/travel` in any channel.'
-      });
+      // Intent detection — natural language
+      const intent = detectTravelIntent(rawMsg);
+      const dmCh = ch;
+      const slackUserRes = await slackAPI('users.info', { user: userId }, 'GET').catch(() => null);
+      const uName = slackUserRes?.user?.real_name || slackUserRes?.user?.name || 'there';
+      if (intent === 'flight' || intent === 'train' || intent === 'hotel' || intent === 'cab') {
+        await startTravelConversation(userId, intent).catch(e => console.log('[DM intent start] error:', e.message));
+      } else if (intent === 'policy') {
+        await sendPolicyMenu(userId, dmCh).catch(e => console.log('[DM policy] error:', e.message));
+      } else if (intent === 'menu' || intent === 'help' || msg === 'new' || msg === 'travel' || msg === 'book') {
+        await sendTravelMenu(userId, dmCh, uName).catch(e => console.log('[DM menu] error:', e.message));
+      } else {
+        await sendTravelMenu(userId, dmCh, uName).catch(e => console.log('[DM unknown] error:', e.message));
+      }
     }
   }
 });
