@@ -269,9 +269,25 @@ function parseDateInput(input) {
 }
 
 async function startTravelConversation(userId) {
-  // Synchronous check BEFORE any await — prevents race condition when Slack sends duplicate button events
-  if (CONV_STARTING.has(userId) || TRAVEL_CONVS.has(userId)) {
-    console.log(`[conv:start] duplicate ignored for ${userId} (starting=${CONV_STARTING.has(userId)} active=${TRAVEL_CONVS.has(userId)})`);
+  // True race condition (two requests in same ms) — silent ignore
+  if (CONV_STARTING.has(userId)) {
+    console.log(`[conv:start] race-condition duplicate ignored for ${userId}`);
+    return;
+  }
+  // Active conversation already exists — remind the user instead of silently blocking
+  const existing = TRAVEL_CONVS.get(userId);
+  if (existing) {
+    console.log(`[conv:start] already active for ${userId} at step ${existing.step}, reminding user`);
+    const ch = existing.ch || await openBotDM(userId).catch(() => null);
+    if (ch) {
+      const step = CONV_STEPS[existing.step];
+      const stepMsg = step ? buildStepMessage(step, existing.step + 1, CONV_STEPS.length) : null;
+      await slackAPI('chat.postMessage', {
+        channel: ch,
+        ...(stepMsg || {}),
+        text: `You already have a travel request in progress (Step ${existing.step + 1} of ${CONV_STEPS.length}).\n\n${stepMsg?.text || step?.prompt || ''}\n\n_Type \`/travel cancel\` to cancel and start fresh._`
+      });
+    }
     return;
   }
   CONV_STARTING.add(userId); // claim the slot synchronously before first await
