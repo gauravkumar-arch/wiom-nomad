@@ -274,11 +274,16 @@ const TRAVEL_POLICIES = {
 // ── Intent detection from natural language ──
 function detectTravelIntent(msg) {
   const m = msg.toLowerCase();
+  const isPolicy = /policy|niti|rule|limit|allowance|kitna|rule/.test(m);
+  if (isPolicy && /flight|fly|plane|udaan/.test(m))              return 'policy_flight';
+  if (isPolicy && /train|rail|irctc|railway/.test(m))            return 'policy_train';
+  if (isPolicy && /hotel|stay|room|accommodation/.test(m))       return 'policy_hotel';
+  if (isPolicy && /cab|taxi|bus|car|ola|uber/.test(m))           return 'policy_cab';
+  if (isPolicy)                                                  return 'policy';
   if (/flight|fly|plane|aeroplane|airplane|udaan/.test(m))       return 'flight';
-  if (/train|rail|irctc|railway|rail/.test(m))                   return 'train';
+  if (/train|rail|irctc|railway/.test(m))                        return 'train';
   if (/hotel|stay|room|accommodation|lodge|ruk/.test(m))         return 'hotel';
   if (/cab|taxi|bus|car|ola|uber|gaadi|vehicle/.test(m))         return 'cab';
-  if (/policy|niti|rule|limit|allowance|kitna/.test(m))          return 'policy';
   if (/travel|book|yatra|trip|request|jaana|jana/.test(m))       return 'menu';
   if (/help|\?|kya|kaise|what|how/.test(m))                      return 'help';
   return null;
@@ -837,7 +842,7 @@ app.get('/api/slack/scopes', async (req, res) => {
   res.json(scopes);
 });
 
-app.get('/api/version', (req, res) => res.json({ version: 'hotel-dynamic-v4', convs: TRAVEL_CONVS.size }));
+app.get('/api/version', (req, res) => res.json({ version: 'policy-dm-v5', convs: TRAVEL_CONVS.size }));
 app.get('/api/slack/last-action', (req, res) => res.json({ lastAction: lastActionLog }));
 
 // Test: check if bot token has views:write scope (will get invalid_trigger, NOT missing_scope if token is fine)
@@ -1549,6 +1554,14 @@ app.post('/slack/events', async (req, res) => {
       const uName = slackUserRes?.user?.real_name || slackUserRes?.user?.name || 'there';
       if (intent === 'flight' || intent === 'train' || intent === 'hotel' || intent === 'cab') {
         await startTravelConversation(userId, intent).catch(e => console.log('[DM intent start] error:', e.message));
+      } else if (intent === 'policy_flight') {
+        await slackAPI('chat.postMessage', { channel: dmCh, text: TRAVEL_POLICIES.flight });
+      } else if (intent === 'policy_train') {
+        await slackAPI('chat.postMessage', { channel: dmCh, text: TRAVEL_POLICIES.train });
+      } else if (intent === 'policy_hotel') {
+        await slackAPI('chat.postMessage', { channel: dmCh, text: TRAVEL_POLICIES.hotel });
+      } else if (intent === 'policy_cab') {
+        await slackAPI('chat.postMessage', { channel: dmCh, text: TRAVEL_POLICIES.bus_cab });
       } else if (intent === 'policy') {
         await sendPolicyMenu(userId, dmCh).catch(e => console.log('[DM policy] error:', e.message));
       } else if (intent === 'menu' || intent === 'help' || msg === 'new' || msg === 'travel' || msg === 'book') {
