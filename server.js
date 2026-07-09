@@ -666,6 +666,15 @@ app.get('/api/slack/reset-conv', (req, res) => {
   res.json({ ok: true, cleared: userId, remaining: TRAVEL_CONVS.size });
 });
 
+// Single-call test: start conversation for one user
+app.get('/api/slack/test-start', async (req, res) => {
+  const userId = req.query.userId || 'U08J1TVJSE7'; // Gaurav Singh
+  TRAVEL_CONVS.delete(userId); CONV_STARTING.delete(userId);
+  let error = null;
+  await startTravelConversation(userId).catch(e => { error = e.message; });
+  res.json({ ok: !error, error, convs: TRAVEL_CONVS.size, convCreated: TRAVEL_CONVS.has(userId) });
+});
+
 app.get('/api/slack/test-dm', async (req, res) => {
   const email = req.query.email || 'gaurav.kumar@wiom.in';
   if (!SLACK_BOT_TOKEN) return res.json({ ok: false, step: 'token', error: 'No bot token' });
