@@ -630,7 +630,7 @@ app.get('/api/slack/scopes', async (req, res) => {
   res.json(scopes);
 });
 
-app.get('/api/version', (req, res) => res.json({ version: 'b18b6ce-persist', convs: TRAVEL_CONVS.size }));
+app.get('/api/version', (req, res) => res.json({ version: '5113183-race-fix', convs: TRAVEL_CONVS.size }));
 
 app.get('/api/slack/test-dm', async (req, res) => {
   const email = req.query.email || 'gaurav.kumar@wiom.in';
