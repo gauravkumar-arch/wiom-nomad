@@ -1167,9 +1167,11 @@ app.post('/slack/actions', async (req, res) => {
     return;
   }
 
-  // ── App Home button: start travel conversation directly ──
+  // ── App Home button: open modal form ──
   if (actionId === 'home_new_travel') {
-    await startTravelConversation(slackUser.id, 'flight').catch(e => console.log('[AppHome] conv start:', e.message));
+    if (payload.trigger_id) {
+      await slackAPI('views.open', buildTravelModal(payload.trigger_id)).catch(e => console.log('[AppHome] modal open:', e.message));
+    }
     return;
   }
 
