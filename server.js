@@ -632,6 +632,18 @@ app.get('/api/slack/scopes', async (req, res) => {
 
 app.get('/api/version', (req, res) => res.json({ version: '5113183-race-fix', convs: TRAVEL_CONVS.size }));
 
+// ── Test: simulate double-click on New Travel Request ──
+app.get('/api/slack/test-race', async (req, res) => {
+  const userId = req.query.userId || 'U0B7PV19V17';
+  TRAVEL_CONVS.delete(userId); CONV_STARTING.delete(userId); // reset state
+  console.log(`[test-race] firing two concurrent startTravelConversation calls for ${userId}`);
+  const [r1, r2] = await Promise.allSettled([
+    startTravelConversation(userId),
+    startTravelConversation(userId)
+  ]);
+  res.json({ ok: true, convs: TRAVEL_CONVS.size, r1: r1.status, r2: r2.status, message: 'Check Slack — should be exactly 1 welcome message' });
+});
+
 app.get('/api/slack/test-dm', async (req, res) => {
   const email = req.query.email || 'gaurav.kumar@wiom.in';
   if (!SLACK_BOT_TOKEN) return res.json({ ok: false, step: 'token', error: 'No bot token' });
