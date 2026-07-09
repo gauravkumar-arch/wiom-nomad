@@ -8,8 +8,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Railway
-        run: npx @railway/cli@latest up --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Trigger Railway Deploy Hook
+        run: |
+          curl -fsSX POST "${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}"
