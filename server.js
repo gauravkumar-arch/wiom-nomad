@@ -796,8 +796,14 @@ app.get('/api/slack/scopes', async (req, res) => {
   res.json(scopes);
 });
 
-app.get('/api/version', (req, res) => res.json({ version: 'modal-debug-v2', convs: TRAVEL_CONVS.size }));
+app.get('/api/version', (req, res) => res.json({ version: 'modal-debug-v3', convs: TRAVEL_CONVS.size }));
 app.get('/api/slack/last-action', (req, res) => res.json({ lastAction: lastActionLog }));
+
+// Test: check if bot token has views:write scope (will get invalid_trigger, NOT missing_scope if token is fine)
+app.get('/api/slack/test-modal-scope', async (req, res) => {
+  const r = await slackAPI('views.open', buildTravelModal('fake_trigger_test_000')).catch(e => ({ ok: false, error: e.message }));
+  res.json({ result: r });
+});
 
 // ── Test: simulate double-click on New Travel Request ──
 app.get('/api/slack/test-race', async (req, res) => {
