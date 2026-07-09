@@ -646,7 +646,7 @@ app.get('/api/slack/scopes', async (req, res) => {
   res.json(scopes);
 });
 
-app.get('/api/version', (req, res) => res.json({ version: '5113183-race-fix', convs: TRAVEL_CONVS.size }));
+app.get('/api/version', (req, res) => res.json({ version: '662f232-button-fix', convs: TRAVEL_CONVS.size }));
 
 // ── Test: simulate double-click on New Travel Request ──
 app.get('/api/slack/test-race', async (req, res) => {
