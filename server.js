@@ -796,7 +796,7 @@ app.get('/api/slack/scopes', async (req, res) => {
   res.json(scopes);
 });
 
-app.get('/api/version', (req, res) => res.json({ version: 'multi-mode-chatbot-v1', convs: TRAVEL_CONVS.size }));
+app.get('/api/version', (req, res) => res.json({ version: 'modal-debug-v2', convs: TRAVEL_CONVS.size }));
 app.get('/api/slack/last-action', (req, res) => res.json({ lastAction: lastActionLog }));
 
 // ── Test: simulate double-click on New Travel Request ──
@@ -1169,8 +1169,12 @@ app.post('/slack/actions', async (req, res) => {
 
   // ── App Home button: open modal form ──
   if (actionId === 'home_new_travel') {
+    console.log(`[modal] home_new_travel clicked by ${slackUser.id}, trigger_id=${payload.trigger_id ? 'YES' : 'MISSING'}`);
     if (payload.trigger_id) {
-      await slackAPI('views.open', buildTravelModal(payload.trigger_id)).catch(e => console.log('[AppHome] modal open:', e.message));
+      const modalRes = await slackAPI('views.open', buildTravelModal(payload.trigger_id)).catch(e => { console.log('[modal] ERROR:', e.message); return null; });
+      console.log('[modal] views.open response:', JSON.stringify(modalRes));
+    } else {
+      console.log('[modal] No trigger_id in payload — cannot open modal');
     }
     return;
   }
