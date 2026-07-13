@@ -8,6 +8,11 @@ const PORT = process.env.PORT || 3000;
 const SLACK_WEBHOOK_URL  = process.env.SLACK_WEBHOOK_URL  || '';
 const SLACK_BOT_TOKEN    = process.env.SLACK_BOT_TOKEN    || '';
 
+// ── Employee Query Bot integration ──
+const BOT_API_TOKEN      = process.env.BOT_API_TOKEN      || 'wiom-bot-api-2025';
+const BOT_WEBHOOK_URL    = process.env.BOT_WEBHOOK_URL    || '';   // set by bot team
+const BOT_WEBHOOK_SECRET = process.env.BOT_WEBHOOK_SECRET || '';   // set by bot team
+
 // ── KEKA HRMS INTEGRATION ──
 const KEKA_CLIENT_ID     = process.env.KEKA_CLIENT_ID     || '';
 const KEKA_CLIENT_SECRET = process.env.KEKA_CLIENT_SECRET || '';
@@ -842,7 +847,7 @@ app.get('/api/slack/scopes', async (req, res) => {
   res.json(scopes);
 });
 
-app.get('/api/version', (req, res) => res.json({ version: 'policy-dm-v5', convs: TRAVEL_CONVS.size }));
+app.get('/api/version', (req, res) => res.json({ version: 'bot-api-v6', convs: TRAVEL_CONVS.size }));
 app.get('/api/slack/last-action', (req, res) => res.json({ lastAction: lastActionLog }));
 
 // Test: check if bot token has views:write scope (will get invalid_trigger, NOT missing_scope if token is fine)
@@ -959,8 +964,167 @@ app.post('/api/requests/update', (req, res) => {
   if (status)     request.status = status;
   if (bookingRef) request.bookingRef = bookingRef;
   if (note)       request.note = note;
-  request.updatedAt = new Date().toISOString().split('T')[0];
+  request.updatedAt = new Date().toISOString();
   res.json({ ok: true, request });
+  // Fire bot webhook if configured
+  if (BOT_WEBHOOK_URL && request.source === 'employee-query-bot') {
+    const payload = JSON.stringify({ requestId: reqId, empSlackUserId: request.employeeSlackId, status: request.status, currentStage: statusToStage(request.status), updatedAt: request.updatedAt });
+    httpsPost(BOT_WEBHOOK_URL, JSON.parse(payload)).catch(e => console.log('[bot-webhook] error:', e.message));
+  }
+});
+
+// ── helpers for bot API ──
+function botAuthMiddleware(req, res, next) {
+  const auth = req.headers['authorization'] || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : auth;
+  if (token !== BOT_API_TOKEN) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  next();
+}
+
+function statusToStage(status) {
+  const map = {
+    PENDING_FUNCTION_HEAD: 'Pending Function Head Approval',
+    PENDING_TRAVEL_DESK:   'Pending Travel Desk Booking',
+    PROCESSED:             'Booked',
+    REJECTED:              'Rejected'
+  };
+  return map[status] || status;
+}
+
+function statusToHuman(status) {
+  const map = {
+    PENDING_FUNCTION_HEAD: 'Pending',
+    PENDING_TRAVEL_DESK:   'In Progress',
+    PROCESSED:             'Completed',
+    REJECTED:              'Rejected'
+  };
+  return map[status] || 'Pending';
+}
+
+// ── Bot API #1: POST /api/travel-requests — create request from Employee Query Bot ──
+app.post('/api/travel-requests', botAuthMiddleware, async (req, res) => {
+  const { empEmail, empName, empId, slackUserId, purpose, fromCity, toCity, travelDate, returnDate,
+          travelMode, hotelNeeded, checkin, checkout, hotelLoc, prefTime, notes } = req.body;
+
+  if (!empEmail) return res.status(400).json({ ok: false, error: 'empEmail is required' });
+  if (!purpose)  return res.status(400).json({ ok: false, error: 'purpose is required' });
+  if (!fromCity) return res.status(400).json({ ok: false, error: 'fromCity is required' });
+  if (!toCity)   return res.status(400).json({ ok: false, error: 'toCity is required' });
+  if (!travelDate) return res.status(400).json({ ok: false, error: 'travelDate is required' });
+  if (!travelMode) return res.status(400).json({ ok: false, error: 'travelMode is required (Flight|Train|Bus)' });
+  if (returnDate && returnDate < travelDate) return res.status(400).json({ ok: false, error: 'returnDate must be >= travelDate' });
+  if (hotelNeeded && !checkin)  return res.status(400).json({ ok: false, error: 'checkin required when hotelNeeded=true' });
+  if (hotelNeeded && !checkout) return res.status(400).json({ ok: false, error: 'checkout required when hotelNeeded=true' });
+  if (hotelNeeded && checkin && checkout && checkout < checkin) return res.status(400).json({ ok: false, error: 'checkout must be >= checkin' });
+
+  const user = USERS_DATA.find(u => u.email.toLowerCase() === empEmail.toLowerCase());
+  if (!user) return res.status(404).json({ ok: false, error: `Employee not found for email: ${empEmail}` });
+
+  const types = [travelMode];
+  if (hotelNeeded) types.push('Hotel');
+
+  const reqId   = nextBotReqId();
+  const now     = new Date().toISOString();
+  const today   = now.split('T')[0];
+  const isFH    = user.role === 'function_head';
+
+  const request = {
+    id: reqId, source: 'employee-query-bot',
+    employeeId: user.id, empId: empId || user.id,
+    employeeName: empName || user.name, employeeEmail: user.email,
+    employeeSlackId: slackUserId || '',
+    dept: user.dept, manager: user.manager || '', functionHead: user.functionHead || '',
+    purpose, fromCity, toCity, travelDate, returnDate: returnDate || '',
+    types, travelMode,
+    hotelNeeded: !!hotelNeeded, checkin: checkin || '', checkout: checkout || '', hotelLoc: hotelLoc || '',
+    prefTime: prefTime || '', priority: 'Normal', notes: notes || '',
+    approvalFileId: '', approvalFileName: '',
+    status: isFH ? 'PENDING_TRAVEL_DESK' : 'PENDING_FUNCTION_HEAD',
+    createdAt: today, updatedAt: now
+  };
+
+  SLACK_REQUESTS.set(reqId, request);
+
+  // Trigger approval flow (same as Slack modal submission)
+  try {
+    const mgrUser = USERS_DATA.find(u => u.name === user.manager);
+    if (mgrUser?.email) {
+      await dmUser(mgrUser.email, { text: `:information_source: *New Travel Request — FYI* — \`${reqId}\`\n:bust_in_silhouette: *${user.name}* (${user.dept})\n:dart: *Purpose:* ${purpose}\n:round_pushpin: *Route:* ${fromCity} → ${toCity}  :calendar: ${travelDate}\n:rocket: *Mode:* ${types.join(' + ')}\n\n_Submitted via Employee Query Bot. ${isFH ? 'Sent directly to Travel Desk.' : 'Pending Function Head approval.'}_` });
+    }
+    if (isFH) {
+      const tdUsers = USERS_DATA.filter(u => u.role === 'travel_desk');
+      await Promise.all(tdUsers.map(td => dmUser(td.email, { text: `:ticket: *Book Tickets — ${reqId}*\n:bust_in_silhouette: *${user.name}* (${user.dept}) — _Function Head_\n:dart: *Purpose:* ${purpose}\n:round_pushpin: *Route:* ${fromCity} → ${toCity}\n:calendar: *Date:* ${travelDate}${returnDate ? ' → ' + returnDate : ''}\n:airplane: *Mode:* ${types.join(' + ')}\n:white_check_mark: *Self-approved* (Function Head)\n\nBook on MyBiz: https://mybiz.makemytrip.com` })));
+    } else {
+      const fhUser = USERS_DATA.find(u => u.name === user.functionHead) || USERS_DATA.find(u => u.role === 'function_head');
+      if (fhUser?.email) await notifyApprover(fhUser.email, reqId, request, 'fh');
+    }
+  } catch(e) { console.log('[bot-api:create] notify error:', e.message); }
+
+  res.status(201).json({ ok: true, requestId: reqId, status: request.status, currentStage: statusToStage(request.status), createdAt: request.createdAt });
+});
+
+// ── Bot API #2: GET /api/travel-requests/status ──
+app.get('/api/travel-requests/status', botAuthMiddleware, (req, res) => {
+  const { requestId, empEmail } = req.query;
+  if (!requestId && !empEmail) return res.status(400).json({ ok: false, error: 'Pass requestId or empEmail' });
+
+  let requests;
+  if (requestId) {
+    const r = SLACK_REQUESTS.get(requestId);
+    requests = r ? [r] : [];
+  } else {
+    requests = [...SLACK_REQUESTS.values()].filter(r => r.employeeEmail?.toLowerCase() === empEmail.toLowerCase());
+  }
+
+  if (requests.length === 0) return res.status(404).json({ ok: false, error: 'No requests found' });
+
+  const pendingWithMap = {
+    PENDING_FUNCTION_HEAD: 'Function Head',
+    PENDING_TRAVEL_DESK:   'Travel Desk',
+    PROCESSED:             'Completed — tickets booked',
+    REJECTED:              'N/A — request rejected'
+  };
+
+  const result = requests.map(r => ({
+    requestId: r.id,
+    empId: r.empId || r.employeeId,
+    empEmail: r.employeeEmail,
+    currentStage: statusToStage(r.status),
+    status: statusToHuman(r.status),
+    pendingWith: pendingWithMap[r.status] || r.status,
+    route: `${r.fromCity} → ${r.toCity}`,
+    travelDate: r.travelDate,
+    modes: r.types,
+    bookingRef: r.bookingRef || null,
+    note: r.note || null,
+    lastUpdated: r.updatedAt || r.createdAt
+  }));
+
+  res.json({ ok: true, requests: result, count: result.length });
+});
+
+// ── Bot API #3: GET /api/travel-requests/schema — field schema for bot popup ──
+app.get('/api/travel-requests/schema', (req, res) => {
+  res.json({
+    fields: [
+      { key:'purpose',    label:'Purpose of Travel',         type:'text',     required:true,  validation:'Non-empty string' },
+      { key:'fromCity',   label:'From City',                 type:'text',     required:true,  validation:'Non-empty string' },
+      { key:'toCity',     label:'To City',                   type:'text',     required:true,  validation:'Non-empty string' },
+      { key:'travelDate', label:'Travel Date',               type:'date',     required:true,  validation:'YYYY-MM-DD, cannot be in the past' },
+      { key:'returnDate', label:'Return Date',               type:'date',     required:false, validation:'YYYY-MM-DD, must be >= travelDate' },
+      { key:'travelMode', label:'Mode of Travel',            type:'dropdown', required:true,  options:['Flight','Train','Bus'] },
+      { key:'hotelNeeded',label:'Hotel Accommodation Needed',type:'boolean',  required:false, validation:'true/false; if true, checkin+checkout required' },
+      { key:'checkin',    label:'Hotel Check-in Date',       type:'date',     required:'if hotelNeeded=true', validation:'YYYY-MM-DD' },
+      { key:'checkout',   label:'Hotel Check-out Date',      type:'date',     required:'if hotelNeeded=true', validation:'YYYY-MM-DD, must be >= checkin' },
+      { key:'hotelLoc',   label:'Preferred Hotel Location',  type:'text',     required:false, validation:'e.g. Near office, City center' },
+      { key:'prefTime',   label:'Preferred Departure Time',  type:'dropdown', required:false, options:['Morning (6 AM – 12 PM)','Afternoon (12 PM – 5 PM)','Evening (5 PM – 9 PM)','Night (9 PM – 6 AM)'] },
+      { key:'notes',      label:'Notes / Special Requests',  type:'text',     required:false, validation:'If travel within 3 days, include Function Head approval reference' }
+    ],
+    identifiers: { primary:'empEmail', secondary:'empId (internal, U010 format)' },
+    stages: ['PENDING_FUNCTION_HEAD','PENDING_TRAVEL_DESK','PROCESSED','REJECTED'],
+    auth: { type:'Bearer token', header:'Authorization: Bearer <token>', note:'Token provided separately' },
+    baseUrl: 'https://wiom-pravash-production.up.railway.app'
+  });
 });
 
 // ── Sync: browser calls this to update request stored on server ──
